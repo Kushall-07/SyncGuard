@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+.venv/
+
+# Datasets
+data/
+*.zip
+*.tar
+*.tar.gz
+*.wav
+*.mp3
+*.mp4
+
+# Model checkpoints
+checkpoints/
+*.pth
+*.pt
+*.ckpt
+*.safetensors
+
+# Generated outputs
+outputs/
+runs/
+logs/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# Environment
+.env
+
+# OS
+.DS_Store
+Thumbs.db
