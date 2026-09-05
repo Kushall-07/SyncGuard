@@ -1,0 +1,24 @@
+# SyncGuard - audio preprocessing / feature configuration (Phase 2A).
+#
+# These are STARTING values taken from the project spec (master-doc section 20).
+# They are NOT claimed to be optimal - later phases tune them with experiments.
+# The same audio front-end configured here is reused by the audio-only spoof
+# detector and by the audio branch of the audio-visual synchronization model.
+
+audio:
+  sample_rate: 16000        # target rate after resampling (Hz)
+  mono: true                # downmix multi-channel input to a single channel
+  normalize: peak           # amplitude normalization: peak | rms | none
+  norm_target: 1.0          # peak amplitude when normalize=peak, target RMS when normalize=rms
+
+  mel:
+    n_fft: 400              # STFT window size in samples (25 ms @ 16 kHz)
+    hop_length: 160         # STFT hop in samples (10 ms @ 16 kHz)
+    win_length: 400         # analysis window length in samples
+    n_mels: 80              # number of mel filterbank bands
+    f_min: 0                # lowest mel band edge (Hz)
+    f_max: 8000             # highest mel band edge (Hz); <= sample_rate / 2
+    power: 2.0              # 2.0 -> power spectrogram, 1.0 -> magnitude
+    center: true            # pad so frame t is centered at t * hop_length
+    log: true               # apply logarithmic (dB) compression to the mel energies
+    log_top_db: 80.0        # clamp dB range to [max - log_top_db, max]
