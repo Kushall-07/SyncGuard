@@ -5,8 +5,8 @@ __pycache__/
 # Virtual environment
 .venv/
 
-# Datasets
-data/
+# Datasets (repo-root dataset dir only - keep src/data/ source tracked)
+/data/
 *.zip
 *.tar
 *.tar.gz

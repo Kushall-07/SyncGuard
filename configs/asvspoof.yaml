@@ -1,0 +1,22 @@
+# SyncGuard - ASVspoof 2019 LA dataset configuration (Phase 3).
+#
+# The dataset is not bundled. Download LA.zip from the Edinburgh DataShare
+# "ASVspoof 2019" record (https://doi.org/10.7488/ds/2555), extract it, and set
+# `root` to the resulting `LA` directory. Then build the manifest with:
+#
+#     python scripts/build_asvspoof_manifest.py --root <LA> --out data/asvspoof/manifest.csv
+
+data:
+  source: asvspoof2019-la
+  root: data/asvspoof/LA                 # directory holding ASVspoof2019_LA_cm_protocols/
+  manifest_csv: data/asvspoof/manifest.csv
+
+  feature: logmel                        # logmel | waveform
+  fixed_seconds: 4.0                     # every utterance is cropped/padded to this length
+  splits: [train, dev, eval]
+
+  # Optional quick-development subset (applied after the split filter). Leave
+  # subset_size: null to use the full split.
+  subset_size: null
+  subset_seed: 0
+  subset_per_speaker_cap: null
