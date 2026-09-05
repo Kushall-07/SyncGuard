@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import random
 from pathlib import Path
-from typing import Literal
+from typing import Callable, Literal
 
 import torch
 from torch.utils.data import DataLoader, Dataset
@@ -63,6 +63,7 @@ class ManifestAudioDataset(Dataset):
         fixed_seconds: float = 4.0,
         random_crop: bool = False,
         seed: int = 0,
+        waveform_transform: "Callable[[torch.Tensor], torch.Tensor] | None" = None,
     ) -> None:
         if len(manifest) == 0:
             raise ValueError("manifest is empty")
@@ -77,6 +78,9 @@ class ManifestAudioDataset(Dataset):
         self.random_crop = random_crop
         self.target_len = int(round(fixed_seconds * audio_cfg.sample_rate))
         self._base_seed = seed
+        # Optional training-time waveform augmentation, applied after crop/pad and
+        # before mel extraction (see src.preprocessing.augment.WaveformAugment).
+        self.waveform_transform = waveform_transform
         # One extractor, kept on CPU; cloned state is unnecessary (no learnable params).
         self._mel = MelSpectrogramExtractor(audio_cfg) if feature == "logmel" else None
         if self._mel is not None:
@@ -96,6 +100,9 @@ class ManifestAudioDataset(Dataset):
         waveform = preprocess_audio(row.path, self.audio_cfg)  # [1, N], 16 kHz, normalized
         rng = random.Random(self._base_seed * 1_000_003 + index) if self.random_crop else None
         waveform = pad_or_crop(waveform, self.target_len, random_crop=self.random_crop, rng=rng)
+
+        if self.waveform_transform is not None:
+            waveform = self.waveform_transform(waveform)
 
         if self.feature == "waveform":
             feat = waveform

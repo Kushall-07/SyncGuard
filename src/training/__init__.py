@@ -1,6 +1,7 @@
 """Training infrastructure: reproducibility, run directories, checkpoints, Trainer."""
 
 from src.training.checkpoint import load_checkpoint, save_checkpoint
+from src.training.spoof_trainer import SpoofTrainer
 from src.training.trainer import Trainer
 from src.training.utils import (
     RunDirectory,
@@ -19,4 +20,5 @@ __all__ = [
     "save_checkpoint",
     "load_checkpoint",
     "Trainer",
+    "SpoofTrainer",
 ]

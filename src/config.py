@@ -30,6 +30,9 @@ __all__ = [
     "ExperimentConfig",
     "ModelConfig",
     "TrainingConfig",
+    "SpecAugmentConfig",
+    "AugmentConfig",
+    "DataConfig",
     "Config",
     "load_audio_config",
     "load_config",
@@ -37,6 +40,9 @@ __all__ = [
 
 _VALID_NORMALIZE = ("peak", "rms", "none")
 _VALID_MONITOR_MODE = ("min", "max")
+_VALID_POOLING = ("attentive", "mean", "meanmax")
+_VALID_FEATURE = ("logmel", "waveform")
+_VALID_AUDIO_ENCODER = ("cnn", "cnn_transformer")
 
 
 def _check_unknown_keys(data: Mapping[str, Any], allowed: tuple[str, ...], where: str) -> None:
@@ -148,26 +154,55 @@ class ExperimentConfig:
 
 @dataclass(frozen=True)
 class ModelConfig:
-    """Shared model hyper-parameters (starting values from spec section 20)."""
+    """Shared model hyper-parameters (starting values from spec section 20).
+
+    The ``audio_cnn_*`` and ``spoof_head_*`` fields configure the Phase 4 CNN
+    audio baseline; ``audio_embedding_dim`` is the temporal-token dimension the
+    encoder emits and that later phases (Transformer, cross-attention) consume.
+    """
 
     audio_embedding_dim: int = 256
     visual_embedding_dim: int = 256
     num_heads: int = 4
     dropout: float = 0.1
 
+    audio_cnn_channels: tuple[int, ...] = (32, 64, 128)
+    audio_cnn_dropout: float = 0.1
+    spoof_head_hidden: int = 128
+    spoof_head_pooling: str = "attentive"
+
+    # Audio encoder variant (Phase 5): "cnn" = CNN front-end only,
+    # "cnn_transformer" = CNN front-end + Transformer encoder over its tokens.
+    audio_encoder: str = "cnn"
+    audio_tf_layers: int = 3
+    audio_tf_ff_dim: int = 1024
+    audio_tf_dropout: float = 0.1
+
     def __post_init__(self) -> None:
-        for name in ("audio_embedding_dim", "visual_embedding_dim", "num_heads"):
+        for name in ("audio_embedding_dim", "visual_embedding_dim", "num_heads",
+                     "spoof_head_hidden", "audio_tf_ff_dim"):
             if getattr(self, name) <= 0:
                 raise ValueError(f"model.{name} must be positive")
         if self.audio_embedding_dim % self.num_heads:
             raise ValueError("model.audio_embedding_dim must be divisible by model.num_heads")
-        if not 0.0 <= self.dropout < 1.0:
-            raise ValueError("model.dropout must be in [0.0, 1.0)")
+        for name in ("dropout", "audio_cnn_dropout", "audio_tf_dropout"):
+            if not 0.0 <= getattr(self, name) < 1.0:
+                raise ValueError(f"model.{name} must be in [0.0, 1.0)")
+        if not self.audio_cnn_channels or any(c <= 0 for c in self.audio_cnn_channels):
+            raise ValueError("model.audio_cnn_channels must be a non-empty list of positive ints")
+        if self.spoof_head_pooling not in _VALID_POOLING:
+            raise ValueError(f"model.spoof_head_pooling must be one of {_VALID_POOLING}")
+        if self.audio_encoder not in _VALID_AUDIO_ENCODER:
+            raise ValueError(f"model.audio_encoder must be one of {_VALID_AUDIO_ENCODER}")
+        if self.audio_tf_layers < 0:
+            raise ValueError("model.audio_tf_layers must be >= 0")
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any] | None) -> "ModelConfig":
         data = dict(data or {})
         _check_unknown_keys(data, _field_names(cls), "model")
+        if "audio_cnn_channels" in data:
+            data["audio_cnn_channels"] = tuple(data["audio_cnn_channels"])
         return cls(**data)
 
 
@@ -218,13 +253,100 @@ class TrainingConfig:
 
 
 @dataclass(frozen=True)
+class SpecAugmentConfig:
+    """SpecAugment masking applied to log-mel batches during training only."""
+
+    freq_masks: int = 2
+    freq_mask_width: int = 12       # max mel bins per mask
+    time_masks: int = 2
+    time_mask_width: int = 16       # max frames per mask
+
+    def __post_init__(self) -> None:
+        for name in _field_names(type(self)):
+            if getattr(self, name) < 0:
+                raise ValueError(f"augment.specaugment.{name} must be >= 0")
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any] | None) -> "SpecAugmentConfig":
+        data = dict(data or {})
+        _check_unknown_keys(data, _field_names(cls), "augment.specaugment")
+        return cls(**data)
+
+
+@dataclass(frozen=True)
+class AugmentConfig:
+    """Training-time audio augmentation (waveform perturbations + SpecAugment)."""
+
+    enabled: bool = True
+    noise_prob: float = 0.5
+    noise_snr_db: tuple[float, float] = (10.0, 30.0)
+    gain_prob: float = 0.5
+    gain_db: tuple[float, float] = (-6.0, 6.0)
+    specaugment: SpecAugmentConfig = field(default_factory=SpecAugmentConfig)
+
+    def __post_init__(self) -> None:
+        for name in ("noise_prob", "gain_prob"):
+            if not 0.0 <= getattr(self, name) <= 1.0:
+                raise ValueError(f"augment.{name} must be in [0.0, 1.0]")
+        for name in ("noise_snr_db", "gain_db"):
+            lo, hi = getattr(self, name)
+            if lo > hi:
+                raise ValueError(f"augment.{name} must be (low, high) with low <= high")
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any] | None) -> "AugmentConfig":
+        data = dict(data or {})
+        _check_unknown_keys(data, _field_names(cls), "augment")
+        spec = SpecAugmentConfig.from_dict(data.pop("specaugment", None))
+        for name in ("noise_snr_db", "gain_db"):
+            if name in data:
+                data[name] = tuple(data[name])
+        return cls(specaugment=spec, **data)
+
+
+@dataclass(frozen=True)
+class DataConfig:
+    """Where the audio dataset lives and how samples are framed for batching."""
+
+    source: str = "synthetic"
+    root: str = "data/asvspoof/LA"
+    manifest_csv: str = "data/asvspoof/manifest.csv"
+    feature: str = "logmel"
+    fixed_seconds: float = 4.0
+    splits: tuple[str, ...] = ("train", "dev", "eval")
+    subset_size: int | None = None
+    subset_seed: int = 0
+    subset_per_speaker_cap: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.feature not in _VALID_FEATURE:
+            raise ValueError(f"data.feature must be one of {_VALID_FEATURE}")
+        if self.fixed_seconds <= 0:
+            raise ValueError("data.fixed_seconds must be positive")
+        if not self.splits:
+            raise ValueError("data.splits must be non-empty")
+        if self.subset_size is not None and self.subset_size <= 0:
+            raise ValueError("data.subset_size must be positive or null")
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any] | None) -> "DataConfig":
+        data = dict(data or {})
+        _check_unknown_keys(data, _field_names(cls), "data")
+        if "splits" in data:
+            data["splits"] = tuple(data["splits"])
+        return cls(**data)
+
+
+@dataclass(frozen=True)
 class Config:
-    """Full experiment configuration: experiment + audio + model + training."""
+    """Full experiment configuration: experiment + data + audio + model + training + augment."""
 
     experiment: ExperimentConfig = field(default_factory=ExperimentConfig)
+    data: DataConfig = field(default_factory=DataConfig)
     audio: AudioConfig = field(default_factory=AudioConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     training: TrainingConfig = field(default_factory=TrainingConfig)
+    augment: AugmentConfig = field(default_factory=AugmentConfig)
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any], *, base_dir: Path | None = None) -> "Config":
@@ -232,9 +354,11 @@ class Config:
         _check_unknown_keys(data, _field_names(cls), "<root>")
         return cls(
             experiment=ExperimentConfig.from_dict(data.get("experiment")),
+            data=_resolve_section(data.get("data"), base_dir, "data", DataConfig.from_dict),
             audio=_resolve_audio_section(data.get("audio"), base_dir),
             model=ModelConfig.from_dict(data.get("model")),
             training=TrainingConfig.from_dict(data.get("training")),
+            augment=AugmentConfig.from_dict(data.get("augment")),
         )
 
 
@@ -246,22 +370,38 @@ def _read_yaml(path: Path) -> dict[str, Any]:
         return yaml.safe_load(fh) or {}
 
 
-def _resolve_audio_section(
-    section: Any,
-    base_dir: Path | None,
-) -> AudioConfig:
+def _resolve_pointer(section: Any, base_dir: Path | None, key: str) -> Any:
+    """If ``section`` is a path string, load that YAML and return its ``key`` sub-mapping."""
+
+    if not isinstance(section, str):
+        return section
+    candidates = [Path(section)]
+    if base_dir is not None:
+        candidates.append(base_dir / section)
+    for candidate in candidates:
+        if candidate.is_file():
+            sub = _read_yaml(candidate)
+            if key not in sub:
+                raise ValueError(f"{candidate}: missing top-level '{key}:' section")
+            return sub[key]
+    raise FileNotFoundError(
+        f"'{key}' config file not found: tried {list(map(str, candidates))}"
+    )
+
+
+def _resolve_section(section: Any, base_dir: Path | None, key: str, builder):
+    """Build a sub-config from an inline mapping, a pointer file, or defaults."""
+
+    section = _resolve_pointer(section, base_dir, key)
+    return builder(section)
+
+
+def _resolve_audio_section(section: Any, base_dir: Path | None) -> AudioConfig:
     """Accept an inline ``audio:`` mapping or a path string to an audio YAML file."""
 
+    section = _resolve_pointer(section, base_dir, "audio")
     if section is None:
         return AudioConfig()
-    if isinstance(section, str):
-        candidates = [Path(section)]
-        if base_dir is not None:
-            candidates.append(base_dir / section)
-        for candidate in candidates:
-            if candidate.is_file():
-                return load_audio_config(candidate)
-        raise FileNotFoundError(f"audio config file not found: tried {list(map(str, candidates))}")
     if isinstance(section, Mapping):
         return AudioConfig.from_dict(section)
     raise ValueError("'audio' must be a mapping or a path string to an audio YAML file")
