@@ -1,23 +1,25 @@
-"""Classification metrics for SyncGuard (Phase 2B skeleton).
+"""Classification metrics for SyncGuard.
 
-Phase 6 fills in the full audio-spoof evaluation report; this module already
-provides the pieces it needs so the :class:`~src.training.trainer.Trainer` and
-later evaluation scripts share one implementation:
+Shared by :class:`~src.training.trainer.Trainer` and the Phase 6 evaluation
+scripts so there is one implementation of every number the project reports:
 
 * :func:`accuracy`
 * :func:`precision_recall_f1`
 * :func:`roc_auc`
 * :func:`equal_error_rate` - the standard anti-spoofing metric (EER)
 * :func:`confusion_matrix`
-* :func:`binary_classification_report` - aggregates the above
+* :func:`roc_points` / :func:`det_points` - curve data for plotting
+* :func:`per_attack_eer` - ASVspoof per-spoofing-system EER breakdown
+* :func:`evaluate_logits` - report straight from model logits
+* :func:`binary_classification_report` - aggregates the scalar metrics
 
 Inputs may be Python lists, NumPy arrays or 1-D ``torch.Tensor``s. Score inputs
-are the probability / logit of the positive class (class ``1``).
+are the probability / score of the positive (bonafide, label ``1``) class.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 from sklearn import metrics as _skm
@@ -28,6 +30,10 @@ __all__ = [
     "roc_auc",
     "equal_error_rate",
     "confusion_matrix",
+    "roc_points",
+    "det_points",
+    "per_attack_eer",
+    "evaluate_logits",
     "binary_classification_report",
 ]
 
@@ -93,6 +99,76 @@ def equal_error_rate(y_true: Any, y_score: Any) -> tuple[float, float]:
 def confusion_matrix(y_true: Any, y_pred: Any, *, labels: list[int] | None = None) -> np.ndarray:
     y_true, y_pred = _to_1d_numpy(y_true), _to_1d_numpy(y_pred)
     return _skm.confusion_matrix(y_true, y_pred, labels=labels)
+
+
+def roc_points(y_true: Any, y_score: Any) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """``(fpr, tpr, thresholds)`` from :func:`sklearn.metrics.roc_curve`."""
+
+    y_true, y_score = _to_1d_numpy(y_true), _to_1d_numpy(y_score)
+    return _skm.roc_curve(y_true, y_score)
+
+
+def det_points(y_true: Any, y_score: Any) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """``(fpr, fnr, thresholds)`` for a Detection Error Tradeoff (DET) curve.
+
+    ``fnr = 1 - tpr``; the EER is where ``fpr`` and ``fnr`` cross.
+    """
+
+    fpr, tpr, thresholds = roc_points(y_true, y_score)
+    return fpr, 1.0 - tpr, thresholds
+
+
+def per_attack_eer(
+    attacks: Sequence[str],
+    y_true: Any,
+    y_score: Any,
+    *,
+    bonafide_tag: str = "-",
+) -> dict[str, dict[str, float]]:
+    """EER of each spoofing system vs the shared bonafide pool (ASVspoof convention).
+
+    ``attacks`` is the per-sample system id (``"-"`` for bonafide, ``"A01"``... for
+    spoof), aligned with ``y_true`` / ``y_score``. Each spoof system is scored
+    against *all* bonafide trials, matching how ASVspoof reports pooled-vs-attack
+    EER. Returns ``{attack_id: {"n_spoof": int, "eer": float, "threshold": float}}``.
+    """
+
+    attacks = np.asarray(list(attacks), dtype=object)
+    y_true = _to_1d_numpy(y_true).astype(int)
+    y_score = _to_1d_numpy(y_score)
+
+    bonafide_mask = y_true == 1
+    bona_scores = y_score[bonafide_mask]
+
+    out: dict[str, dict[str, float]] = {}
+    for attack in sorted(set(attacks[~bonafide_mask])):
+        if attack == bonafide_tag:
+            continue
+        spoof_scores = y_score[(~bonafide_mask) & (attacks == attack)]
+        sub_true = np.concatenate([np.ones_like(bona_scores), np.zeros_like(spoof_scores)])
+        sub_score = np.concatenate([bona_scores, spoof_scores])
+        eer, threshold = equal_error_rate(sub_true, sub_score)
+        out[str(attack)] = {
+            "n_spoof": int(spoof_scores.size),
+            "eer": eer,
+            "threshold": threshold,
+        }
+    return out
+
+
+def evaluate_logits(logits: Any, y_true: Any) -> dict[str, Any]:
+    """Full report from raw 2-class logits: softmax -> P(bonafide), argmax -> pred."""
+
+    if hasattr(logits, "detach"):
+        logits = logits.detach().cpu().numpy()
+    logits = np.asarray(logits, dtype=float)
+    if logits.ndim != 2 or logits.shape[1] != 2:
+        raise ValueError(f"expected [N, 2] logits, got shape {logits.shape}")
+    exp = np.exp(logits - logits.max(axis=1, keepdims=True))
+    probs = exp / exp.sum(axis=1, keepdims=True)
+    y_score = probs[:, 1]
+    y_pred = logits.argmax(axis=1)
+    return binary_classification_report(y_true, y_pred, y_score)
 
 
 def binary_classification_report(
