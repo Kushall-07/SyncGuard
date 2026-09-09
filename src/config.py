@@ -33,6 +33,8 @@ __all__ = [
     "SpecAugmentConfig",
     "AugmentConfig",
     "DataConfig",
+    "VideoDataConfig",
+    "VideoAugmentConfig",
     "Config",
     "load_audio_config",
     "load_config",
@@ -40,9 +42,14 @@ __all__ = [
 
 _VALID_NORMALIZE = ("peak", "rms", "none")
 _VALID_MONITOR_MODE = ("min", "max")
+_VALID_SCHEDULER = ("none", "cosine")
+_VALID_CLASS_WEIGHT = ("balanced", "none")
 _VALID_POOLING = ("attentive", "mean", "meanmax")
 _VALID_FEATURE = ("logmel", "waveform")
 _VALID_AUDIO_ENCODER = ("cnn", "cnn_transformer")
+_VALID_VISUAL_ENCODER = ("transformer", "mlp_baseline")
+_VALID_VISUAL_REGIONS = ("face", "mouth", "face_mouth")
+_VALID_LANDMARK_NORMALIZE = ("interocular", "none")
 
 
 def _check_unknown_keys(data: Mapping[str, Any], allowed: tuple[str, ...], where: str) -> None:
@@ -178,14 +185,30 @@ class ModelConfig:
     audio_tf_ff_dim: int = 1024
     audio_tf_dropout: float = 0.1
 
+    # Visual branch (Phase 7): the classifier consumes normalised MediaPipe
+    # face/mouth landmark sequences, not pixels. "transformer" = landmark
+    # embedding + positional encoding + temporal Transformer + deepfake head;
+    # "mlp_baseline" = landmark embedding + order-free temporal pooling + MLP
+    # (the non-temporal reference used to measure the temporal contribution).
+    visual_encoder: str = "transformer"
+    visual_regions: str = "face_mouth"
+    landmark_coords: int = 3
+    visual_embed_hidden: int = 256
+    visual_tf_layers: int = 3
+    visual_tf_ff_dim: int = 1024
+    visual_tf_dropout: float = 0.1
+
     def __post_init__(self) -> None:
         for name in ("audio_embedding_dim", "visual_embedding_dim", "num_heads",
-                     "spoof_head_hidden", "audio_tf_ff_dim"):
+                     "spoof_head_hidden", "audio_tf_ff_dim", "visual_embed_hidden",
+                     "visual_tf_ff_dim"):
             if getattr(self, name) <= 0:
                 raise ValueError(f"model.{name} must be positive")
         if self.audio_embedding_dim % self.num_heads:
             raise ValueError("model.audio_embedding_dim must be divisible by model.num_heads")
-        for name in ("dropout", "audio_cnn_dropout", "audio_tf_dropout"):
+        if self.visual_embedding_dim % self.num_heads:
+            raise ValueError("model.visual_embedding_dim must be divisible by model.num_heads")
+        for name in ("dropout", "audio_cnn_dropout", "audio_tf_dropout", "visual_tf_dropout"):
             if not 0.0 <= getattr(self, name) < 1.0:
                 raise ValueError(f"model.{name} must be in [0.0, 1.0)")
         if not self.audio_cnn_channels or any(c <= 0 for c in self.audio_cnn_channels):
@@ -196,6 +219,14 @@ class ModelConfig:
             raise ValueError(f"model.audio_encoder must be one of {_VALID_AUDIO_ENCODER}")
         if self.audio_tf_layers < 0:
             raise ValueError("model.audio_tf_layers must be >= 0")
+        if self.visual_encoder not in _VALID_VISUAL_ENCODER:
+            raise ValueError(f"model.visual_encoder must be one of {_VALID_VISUAL_ENCODER}")
+        if self.visual_regions not in _VALID_VISUAL_REGIONS:
+            raise ValueError(f"model.visual_regions must be one of {_VALID_VISUAL_REGIONS}")
+        if self.landmark_coords not in (2, 3):
+            raise ValueError("model.landmark_coords must be 2 or 3")
+        if self.visual_tf_layers < 0:
+            raise ValueError("model.visual_tf_layers must be >= 0")
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any] | None) -> "ModelConfig":
@@ -226,6 +257,16 @@ class TrainingConfig:
     monitor: str = "val_loss"
     monitor_mode: str = "min"
     early_stopping_patience: int = 5
+    # Per-epoch LR schedule (stepped once per epoch by src.training.trainer.Trainer).
+    # "none" keeps the flat LR (existing behaviour); "cosine" does an optional
+    # `warmup_epochs` linear ramp then cosine decay to ~0 - see
+    # src.training.utils.build_scheduler.
+    scheduler: str = "none"
+    warmup_epochs: int = 0
+    # Only read by the video branch (scripts/train_deepfake_landmark.py):
+    # "balanced" = inverse-frequency class weights (default, unchanged);
+    # "none" = ordinary cross-entropy.
+    class_weight: str = "balanced"
 
     def __post_init__(self) -> None:
         if self.batch_size <= 0 or self.epochs <= 0:
@@ -244,6 +285,14 @@ class TrainingConfig:
             raise ValueError(f"training.monitor_mode must be one of {_VALID_MONITOR_MODE}")
         if self.early_stopping_patience < 0:
             raise ValueError("training.early_stopping_patience must be >= 0 (0 disables)")
+        if self.scheduler not in _VALID_SCHEDULER:
+            raise ValueError(f"training.scheduler must be one of {_VALID_SCHEDULER}")
+        if self.warmup_epochs < 0:
+            raise ValueError("training.warmup_epochs must be >= 0")
+        if self.warmup_epochs >= self.epochs:
+            raise ValueError("training.warmup_epochs must be < training.epochs")
+        if self.class_weight not in _VALID_CLASS_WEIGHT:
+            raise ValueError(f"training.class_weight must be one of {_VALID_CLASS_WEIGHT}")
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any] | None) -> "TrainingConfig":
@@ -338,8 +387,92 @@ class DataConfig:
 
 
 @dataclass(frozen=True)
+class VideoDataConfig:
+    """Where the Celeb-DF video dataset and its cached landmarks live (Phase 7).
+
+    The model consumes ``<landmarks_dir>/<sample_id>.npz`` (raw MediaPipe FaceMesh
+    points, normalised in the dataset); ``crops_dir`` only holds optional face
+    JPEGs for preprocessing QA and is never read by the classifier.
+    """
+
+    source: str = "celeb-df-v2"
+    root: str = "data/celebdf"
+    landmarks_dir: str = "data/celebdf/landmarks"
+    crops_dir: str = "data/celebdf/crops"
+    manifest_csv: str = "data/celebdf/manifest.csv"
+    num_frames: int = 16
+    regions: str = "face_mouth"
+    normalize: str = "interocular"
+    align_rotation: bool = True
+    dev_identity_frac: float = 0.15
+    min_valid_frames: int = 4
+    splits: tuple[str, ...] = ("train", "dev", "eval")
+    subset_size: int | None = None
+    subset_seed: int = 0
+
+    def __post_init__(self) -> None:
+        if self.num_frames <= 0:
+            raise ValueError("video.num_frames must be positive")
+        if self.regions not in _VALID_VISUAL_REGIONS:
+            raise ValueError(f"video.regions must be one of {_VALID_VISUAL_REGIONS}")
+        if self.normalize not in _VALID_LANDMARK_NORMALIZE:
+            raise ValueError(f"video.normalize must be one of {_VALID_LANDMARK_NORMALIZE}")
+        if not 0.0 <= self.dev_identity_frac < 1.0:
+            raise ValueError("video.dev_identity_frac must be in [0.0, 1.0)")
+        if self.min_valid_frames < 0:
+            raise ValueError("video.min_valid_frames must be >= 0")
+        if not self.splits:
+            raise ValueError("video.splits must be non-empty")
+        if self.subset_size is not None and self.subset_size <= 0:
+            raise ValueError("video.subset_size must be positive or null")
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any] | None) -> "VideoDataConfig":
+        data = dict(data or {})
+        _check_unknown_keys(data, _field_names(cls), "video")
+        if "splits" in data:
+            data["splits"] = tuple(data["splits"])
+        return cls(**data)
+
+
+@dataclass(frozen=True)
+class VideoAugmentConfig:
+    """Training-time landmark-space augmentation for the visual branch (Phase 7)."""
+
+    enabled: bool = True
+    coord_jitter_std: float = 0.01      # gaussian noise added to normalised coords
+    coord_jitter_prob: float = 0.5
+    time_mask_frames: int = 2           # up to this many frames zero-velocity held
+    time_mask_prob: float = 0.5
+    hflip_prob: float = 0.5             # mirror via landmarks.MIRROR_MAP
+    scale_jitter: float = 0.05         # +/- fractional global scale
+    rot_jitter_deg: float = 5.0        # +/- global in-plane rotation
+
+    def __post_init__(self) -> None:
+        for name in ("coord_jitter_prob", "time_mask_prob", "hflip_prob"):
+            if not 0.0 <= getattr(self, name) <= 1.0:
+                raise ValueError(f"video_augment.{name} must be in [0.0, 1.0]")
+        for name in ("coord_jitter_std", "scale_jitter", "rot_jitter_deg"):
+            if getattr(self, name) < 0:
+                raise ValueError(f"video_augment.{name} must be >= 0")
+        if self.time_mask_frames < 0:
+            raise ValueError("video_augment.time_mask_frames must be >= 0")
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any] | None) -> "VideoAugmentConfig":
+        data = dict(data or {})
+        _check_unknown_keys(data, _field_names(cls), "video_augment")
+        return cls(**data)
+
+
+@dataclass(frozen=True)
 class Config:
-    """Full experiment configuration: experiment + data + audio + model + training + augment."""
+    """Full experiment configuration.
+
+    ``data`` / ``audio`` / ``augment`` drive the audio branch (Phases 2-6);
+    ``video`` / ``video_augment`` drive the visual branch (Phase 7) and are
+    ``None`` for audio-only experiments.
+    """
 
     experiment: ExperimentConfig = field(default_factory=ExperimentConfig)
     data: DataConfig = field(default_factory=DataConfig)
@@ -347,11 +480,14 @@ class Config:
     model: ModelConfig = field(default_factory=ModelConfig)
     training: TrainingConfig = field(default_factory=TrainingConfig)
     augment: AugmentConfig = field(default_factory=AugmentConfig)
+    video: VideoDataConfig | None = None
+    video_augment: VideoAugmentConfig | None = None
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any], *, base_dir: Path | None = None) -> "Config":
         data = dict(data)
         _check_unknown_keys(data, _field_names(cls), "<root>")
+        video_raw = _resolve_pointer(data.get("video"), base_dir, "video")
         return cls(
             experiment=ExperimentConfig.from_dict(data.get("experiment")),
             data=_resolve_section(data.get("data"), base_dir, "data", DataConfig.from_dict),
@@ -359,6 +495,12 @@ class Config:
             model=ModelConfig.from_dict(data.get("model")),
             training=TrainingConfig.from_dict(data.get("training")),
             augment=AugmentConfig.from_dict(data.get("augment")),
+            video=VideoDataConfig.from_dict(video_raw) if video_raw is not None else None,
+            video_augment=(
+                VideoAugmentConfig.from_dict(data.get("video_augment"))
+                if data.get("video_augment") is not None
+                else None
+            ),
         )
 
 

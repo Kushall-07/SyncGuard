@@ -107,19 +107,24 @@ def plot_score_distributions(
     path: str | Path,
     *,
     bins: int = 40,
-    title: str = "Score distribution: P(bonafide)",
+    class_names: Sequence[str] = _CLASS_NAMES,
+    pos_name: str | None = None,
+    title: str | None = None,
 ) -> Path:
     y_true = np.asarray(y_true).reshape(-1).astype(int)
     y_score = np.asarray(y_score).reshape(-1)
     eer, threshold = equal_error_rate(y_true, y_score)
+    neg_label, pos_label = class_names[0], class_names[1]
+    pos_name = pos_name or pos_label
+    title = title or f"Score distribution: P({pos_name})"
 
     fig, ax = plt.subplots(figsize=(5.0, 3.6), constrained_layout=True)
-    ax.hist(y_score[y_true == 0], bins=bins, alpha=0.6, label="spoof", color="#d1495b")
-    ax.hist(y_score[y_true == 1], bins=bins, alpha=0.6, label="bonafide", color="#00798c")
+    ax.hist(y_score[y_true == 0], bins=bins, alpha=0.6, label=neg_label, color="#d1495b")
+    ax.hist(y_score[y_true == 1], bins=bins, alpha=0.6, label=pos_label, color="#00798c")
     if np.isfinite(threshold):
         ax.axvline(threshold, color="black", linestyle="--", linewidth=1,
                    label=f"EER thr = {threshold:.3f} (EER {eer * 100:.2f}%)")
-    ax.set(xlabel="P(bonafide)", ylabel="count", title=title)
+    ax.set(xlabel=f"P({pos_name})", ylabel="count", title=title)
     ax.legend()
     return _finish(fig, path)
 
@@ -163,16 +168,26 @@ def save_spoof_evaluation_figures(
     y_score: Any,
     confusion: Any,
     prefix: str = "",
+    class_names: Sequence[str] = _CLASS_NAMES,
+    pos_name: str | None = None,
 ) -> dict[str, Path]:
-    """Write the confusion-matrix, ROC, DET and score-distribution PNGs."""
+    """Write the confusion-matrix, ROC, DET and score-distribution PNGs.
+
+    ``class_names`` / ``pos_name`` default to the audio branch's
+    ``("spoof", "bonafide")`` / ``"bonafide"``; the visual branch passes
+    ``("fake", "real")`` / ``"real"``.
+    """
 
     out_dir = Path(out_dir)
     p = f"{prefix}_" if prefix else ""
     return {
-        "confusion_matrix": plot_confusion_matrix(confusion, out_dir / f"{p}confusion_matrix.png"),
+        "confusion_matrix": plot_confusion_matrix(
+            confusion, out_dir / f"{p}confusion_matrix.png", class_names=class_names
+        ),
         "roc_curve": plot_roc_curve(y_true, y_score, out_dir / f"{p}roc_curve.png"),
         "det_curve": plot_det_curve(y_true, y_score, out_dir / f"{p}det_curve.png"),
         "score_distributions": plot_score_distributions(
-            y_true, y_score, out_dir / f"{p}score_distributions.png"
+            y_true, y_score, out_dir / f"{p}score_distributions.png",
+            class_names=class_names, pos_name=pos_name,
         ),
     }

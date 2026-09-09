@@ -1,0 +1,50 @@
+# SyncGuard - Phase 7: non-temporal landmark baseline for video deepfake detection.
+#
+# Identical to configs/deepfake_transformer.yaml except visual_encoder:
+# mlp_baseline - landmark embedding + order-free temporal pooling (mean/std) +
+# MLP. The gap to the Transformer measures what temporal modelling contributes.
+
+experiment:
+  name: deepfake-landmark-baseline
+  seed: 1337
+  deterministic: false
+  output_root: outputs/runs
+
+video: configs/celebdf.yaml
+
+model:
+  visual_embedding_dim: 256
+  visual_encoder: mlp_baseline    # transformer | mlp_baseline
+  visual_regions: face_mouth
+  landmark_coords: 3
+  visual_embed_hidden: 256
+  visual_tf_layers: 3            # unused by the baseline; kept for config parity
+  visual_tf_ff_dim: 1024
+  visual_tf_dropout: 0.1
+  num_heads: 4
+  dropout: 0.1
+  spoof_head_hidden: 128
+  spoof_head_pooling: attentive
+
+video_augment:
+  enabled: true
+  coord_jitter_std: 0.01
+  coord_jitter_prob: 0.5
+  time_mask_frames: 2
+  time_mask_prob: 0.5
+  hflip_prob: 0.5
+  scale_jitter: 0.05
+  rot_jitter_deg: 5.0
+
+training:
+  batch_size: 32
+  learning_rate: 0.0005
+  weight_decay: 0.0001
+  epochs: 40
+  num_workers: 2
+  amp: true
+  grad_accum_steps: 1
+  grad_clip_norm: 5.0
+  monitor: val_eer
+  monitor_mode: min
+  early_stopping_patience: 8

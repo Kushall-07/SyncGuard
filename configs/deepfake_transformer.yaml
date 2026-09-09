@@ -1,0 +1,51 @@
+# SyncGuard - Phase 7: temporal-Transformer video deepfake detector on Celeb-DF-v2.
+#
+# Trains src.models.video.DeepfakeClassifier ("transformer" variant) on cached
+# MediaPipe landmark sequences. scripts/compare_visual_models.py runs this
+# against configs/deepfake_landmark_baseline.yaml to measure the temporal
+# contribution. Values are starting points, not tuned optima.
+
+experiment:
+  name: deepfake-transformer-baseline
+  seed: 1337
+  deterministic: false
+  output_root: outputs/runs
+
+video: configs/celebdf.yaml
+
+model:
+  visual_embedding_dim: 256       # token dim emitted by the landmark embedding
+  visual_encoder: transformer     # transformer | mlp_baseline
+  visual_regions: face_mouth      # face | mouth | face_mouth
+  landmark_coords: 3              # x, y, z from FaceMesh
+  visual_embed_hidden: 256
+  visual_tf_layers: 3
+  visual_tf_ff_dim: 1024
+  visual_tf_dropout: 0.1
+  num_heads: 4
+  dropout: 0.1
+  spoof_head_hidden: 128
+  spoof_head_pooling: attentive   # attentive | mean | meanmax
+
+video_augment:
+  enabled: true
+  coord_jitter_std: 0.01
+  coord_jitter_prob: 0.5
+  time_mask_frames: 2
+  time_mask_prob: 0.5
+  hflip_prob: 0.5
+  scale_jitter: 0.05
+  rot_jitter_deg: 5.0
+
+training:
+  batch_size: 32                  # landmarks are tiny; CPU-cheap
+  learning_rate: 0.0005
+  weight_decay: 0.0001
+  epochs: 40
+  num_workers: 2
+  amp: true
+  grad_accum_steps: 1
+  grad_clip_norm: 5.0
+  monitor: val_eer                # headline metric (lower is better)
+  monitor_mode: min
+  early_stopping_patience: 8

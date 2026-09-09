@@ -1,0 +1,35 @@
+# SyncGuard - Celeb-DF-v2 DENSE landmark dataset config (Phase 8).
+#
+# Same dataset / split / normalization as configs/celebdf.yaml, but points at the
+# 32-frame contiguous dense cache and the dense-derived manifest:
+#
+#   landmarks_dir : data/celebdf/landmarks_dense   (points[32,478,3] per clip)
+#   manifest_csv  : data/celebdf/manifest_dense.csv
+#   num_frames    : 32   (== window length -> frame selection is the identity,
+#                         so the contiguous window reaches the model unchanged)
+#
+# Build steps (run manually if the cache / manifest are not present):
+#   python scripts/extract_celebdf_landmarks.py --manifest data/celebdf/manifest.csv \
+#       --window 32 --stride 1 --window-start center
+#   python scripts/build_celebdf_manifest.py --root data/celebdf \
+#       --out data/celebdf/manifest_dense.csv \
+#       --landmarks-dir data/celebdf/landmarks_dense --min-valid-frames 4
+
+video:
+  source: celeb-df-v2
+  root: data/celebdf
+  landmarks_dir: data/celebdf/landmarks_dense
+  crops_dir: data/celebdf/crops
+  manifest_csv: data/celebdf/manifest_dense.csv
+
+  num_frames: 32
+  regions: face_mouth
+  normalize: interocular
+  align_rotation: true
+
+  dev_identity_frac: 0.15
+  min_valid_frames: 4
+  splits: [train, dev, eval]
+
+  subset_size: null
+  subset_seed: 0

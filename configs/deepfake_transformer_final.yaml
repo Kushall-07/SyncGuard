@@ -1,0 +1,67 @@
+# SyncGuard - Phase 8 FINAL controlled visual training experiment.
+#
+# One properly controlled full-data run of the EXISTING visual Transformer
+# (src.models.video.DeepfakeClassifier, "transformer" variant - architecture
+# unchanged). Question it answers: can the landmark representation reach the
+# ~0.734 eval-AUC linear-feature ceiling under a sensible training setup?
+#
+# Run (manually):
+#   python scripts/train_deepfake_landmark.py --config configs/deepfake_transformer_final.yaml
+#   python scripts/train_deepfake_landmark.py --config configs/deepfake_transformer_final.yaml --seed 7
+#
+# Everything below the model section is the *only* thing that differs from
+# configs/deepfake_transformer.yaml:
+#   - plain cross-entropy (class_weight: none)
+#   - LR 3e-4 with an 8-epoch linear warmup then cosine decay to ~0
+#   - coord_jitter + time_mask disabled (they corrupt the weak temporal signal);
+#     hflip / scale / rotation kept (temporally consistent)
+#   - NO early stopping (early_stopping_patience: 0)
+#   - checkpoint selection + reporting on DEV AUC (monitor: val_roc_auc, max)
+
+experiment:
+  name: deepfake-transformer-final
+  seed: 1337
+  deterministic: false
+  output_root: outputs/runs
+
+video: configs/celebdf_dense.yaml
+
+model:
+  visual_embedding_dim: 256
+  visual_encoder: transformer
+  visual_regions: face_mouth
+  landmark_coords: 3
+  visual_embed_hidden: 256
+  visual_tf_layers: 3
+  visual_tf_ff_dim: 1024
+  visual_tf_dropout: 0.1
+  num_heads: 4
+  dropout: 0.1
+  spoof_head_hidden: 128
+  spoof_head_pooling: attentive
+
+video_augment:
+  enabled: true
+  coord_jitter_std: 0.0        # DISABLED
+  coord_jitter_prob: 0.0       # DISABLED
+  time_mask_frames: 0          # DISABLED
+  time_mask_prob: 0.0          # DISABLED
+  hflip_prob: 0.5
+  scale_jitter: 0.05
+  rot_jitter_deg: 5.0
+
+training:
+  batch_size: 32
+  learning_rate: 0.0003        # 3e-4
+  weight_decay: 0.0001
+  epochs: 120
+  warmup_epochs: 8
+  scheduler: cosine            # 8-epoch linear warmup -> cosine decay to ~0 over 120
+  class_weight: none           # ordinary cross-entropy
+  num_workers: 2
+  amp: true
+  grad_accum_steps: 1
+  grad_clip_norm: 5.0
+  monitor: val_roc_auc         # select / report best.pt by DEV AUC (higher is better)
+  monitor_mode: max
+  early_stopping_patience: 0    # NO early stopping

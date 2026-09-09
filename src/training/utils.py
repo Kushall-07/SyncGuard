@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import random
 from dataclasses import asdict, is_dataclass
@@ -21,13 +22,45 @@ import numpy as np
 import torch
 import yaml
 
+from src.config import TrainingConfig
+
 __all__ = [
     "set_seed",
     "get_device",
     "count_parameters",
     "config_to_dict",
+    "build_scheduler",
     "RunDirectory",
 ]
+
+
+def build_scheduler(
+    optimizer: torch.optim.Optimizer, training_cfg: TrainingConfig
+) -> torch.optim.lr_scheduler.LRScheduler | None:
+    """Build the per-epoch LR scheduler described by ``training_cfg``.
+
+    ``"none"`` -> ``None`` (flat LR, unchanged behaviour). ``"cosine"`` -> a
+    :class:`~torch.optim.lr_scheduler.LambdaLR` whose multiplier ramps linearly
+    from ``1/warmup_epochs`` to ``1`` over ``warmup_epochs`` epochs, then follows
+    a half-cosine from ``1`` to ``~0`` across the remaining ``epochs``.
+
+    :class:`~src.training.trainer.Trainer` calls ``scheduler.step()`` exactly once
+    per epoch and checkpoints its state, so no other wiring is required.
+    """
+
+    if training_cfg.scheduler == "none":
+        return None
+    total = int(training_cfg.epochs)
+    warm = int(training_cfg.warmup_epochs)
+
+    def lr_lambda(epoch: int) -> float:  # epoch: 0-indexed, advanced by .step()
+        if warm and epoch < warm:
+            return float(epoch + 1) / float(warm)
+        progress = (epoch - warm) / max(1, total - warm)
+        progress = min(max(progress, 0.0), 1.0)
+        return 0.5 * (1.0 + math.cos(math.pi * progress))
+
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
 
 def set_seed(seed: int, *, deterministic: bool = False) -> None:

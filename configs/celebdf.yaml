@@ -1,0 +1,31 @@
+# SyncGuard - Celeb-DF-v2 video dataset configuration (Phase 7).
+#
+# The dataset is not bundled. Request Celeb-DF-v2 from the authors
+# (https://github.com/yuezunli/celeb-deepfakeforensics) and extract so that
+# `root` contains Celeb-real/, Celeb-synthesis/, YouTube-real/ and
+# List_of_testing_videos.txt. Then cache landmarks and build the manifest:
+#
+#     python scripts/extract_celebdf_landmarks.py --manifest data/celebdf/manifest.csv
+#     python scripts/build_celebdf_manifest.py --root data/celebdf --out data/celebdf/manifest.csv
+#
+# The classifier consumes normalised MediaPipe face/mouth landmark sequences from
+# `landmarks_dir`; `crops_dir` only holds optional face JPEGs for QA.
+
+video:
+  source: celeb-df-v2
+  root: data/celebdf
+  landmarks_dir: data/celebdf/landmarks
+  crops_dir: data/celebdf/crops
+  manifest_csv: data/celebdf/manifest.csv
+
+  num_frames: 16                  # frames sampled per video for the model
+  regions: face_mouth             # face | mouth | face_mouth
+  normalize: interocular          # interocular | none
+  align_rotation: true            # rotate the eye line horizontal per frame
+
+  dev_identity_frac: 0.15         # share of identities held out of train for dev
+  min_valid_frames: 4             # videos with fewer detected faces are flagged
+  splits: [train, dev, eval]
+
+  subset_size: null               # quick-dev cap applied after the split filter
+  subset_seed: 0
