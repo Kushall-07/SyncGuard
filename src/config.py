@@ -267,6 +267,10 @@ class TrainingConfig:
     # "balanced" = inverse-frequency class weights (default, unchanged);
     # "none" = ordinary cross-entropy.
     class_weight: str = "balanced"
+    # Phase 11: probability of using negative (time-shifted) pairs during training
+    negative_pair_probability: float = 0.5
+    # Phase 12: weight for contrastive loss (0 = sync-only, >0 = combined)
+    lambda_contrastive: float = 0.0
 
     def __post_init__(self) -> None:
         if self.batch_size <= 0 or self.epochs <= 0:
@@ -287,12 +291,16 @@ class TrainingConfig:
             raise ValueError("training.early_stopping_patience must be >= 0 (0 disables)")
         if self.scheduler not in _VALID_SCHEDULER:
             raise ValueError(f"training.scheduler must be one of {_VALID_SCHEDULER}")
+        if not 0 <= self.negative_pair_probability <= 1:
+            raise ValueError("training.negative_pair_probability must be in [0.0, 1.0]")
         if self.warmup_epochs < 0:
             raise ValueError("training.warmup_epochs must be >= 0")
         if self.warmup_epochs >= self.epochs:
             raise ValueError("training.warmup_epochs must be < training.epochs")
         if self.class_weight not in _VALID_CLASS_WEIGHT:
             raise ValueError(f"training.class_weight must be one of {_VALID_CLASS_WEIGHT}")
+        if self.lambda_contrastive < 0:
+            raise ValueError("training.lambda_contrastive must be >= 0")
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any] | None) -> "TrainingConfig":

@@ -11,9 +11,55 @@
 # over the aligned tokens (src/models/fusion/cross_attention.py). No sync head, no
 # sync loss - those are Phases 11/12.
 #
+# Phase 11 (av_align.sync_head / av_align.sync_loss / av_align.sync_pairs):
+# audio-visual synchronization training with positive/negative temporal shifts.
+#
 # NOTE (data limitation): Celeb-DF-v2 mp4s are video-only, so this pipeline cannot
 # yet be exercised on real paired audio+video. See
 # docs/decisions/0003-av-temporal-alignment.md and 0004-av-cross-attention.md.
+
+# Audio preprocessing configuration (for LAV-DF dataset)
+audio:
+  sample_rate: 16000
+  mono: true
+  normalize: peak
+  norm_target: 1.0
+  mel:
+    n_fft: 400
+    hop_length: 160
+    win_length: 400
+    n_mels: 80
+    f_min: 0.0
+    f_max: 8000.0
+    power: 2.0
+    center: true
+    log: true
+    log_top_db: 80.0
+
+# Experiment configuration
+experiment:
+  name: sync-phase11
+  seed: 42
+  deterministic: false
+  output_root: outputs/runs
+
+# Training configuration
+training:
+  batch_size: 32
+  learning_rate: 0.0003
+  weight_decay: 0.0001
+  epochs: 120
+  num_workers: 2
+  amp: true
+  grad_accum_steps: 1
+  grad_clip_norm: 5.0
+  monitor: val_video_sync_auc
+  monitor_mode: max
+  early_stopping_patience: 0
+  scheduler: cosine
+  warmup_epochs: 8
+  negative_pair_probability: 0.5  # probability of using negative pairs during training
+  lambda_contrastive: 0.0         # weight for contrastive loss (0 = sync-only, >0 = combined)
 
 av_align:
   # Exported encoder checkpoints. Paths are placeholders - point them at concrete
@@ -35,7 +81,6 @@ av_align:
   video:
     num_frames: 32                     # T_v, the dense contiguous window
     regions: face_mouth
-    landmark_coords: 3
 
   # Phase 10 - bidirectional cross-attention over the aligned tokens.
   cross_attention:
@@ -46,3 +91,32 @@ av_align:
     dropout: 0.1
     fusion: concat_proj               # production default | gated | add (ablations only)
     add_positional_encoding: false     # inputs already carry the encoders' positional info
+
+  # Phase 11 - sync head for audio-visual synchronization
+  sync_head:
+    hidden_dim: 128                    # hidden dimension for sync head
+    dropout: 0.1                       # dropout rate
+    aggregation: mean                   # video-level aggregation: mean | max | median
+
+  # Phase 11 - sync loss configuration
+  sync_loss:
+    pos_weight: null                    # positive class weight (null = balanced)
+    reduction: mean                    # loss reduction: none | mean | sum
+
+  # Phase 11 - temporal target and pair construction
+  sync_pairs:
+    shift_seconds: [-2.0, -1.0, -0.5, 0.5, 1.0, 2.0]  # audio shift values in seconds
+    shift_strategy: uniform            # shift sampling: uniform | random
+    audio_token_seconds: 0.01         # from Phase 5 audio encoder (hop_length / sr = 160/16000)
+
+  # Phase 12 - contrastive learning (InfoNCE)
+  contrastive:
+    enabled: false                   # enable/disable contrastive learning
+    projection_dim: 128              # output projection dimension
+    hidden_dim: 256                  # hidden layer dimension for projection heads
+    adapter_hidden_dim: 256          # hidden layer dimension for adapters
+    dropout: 0.1                      # dropout rate
+    use_bn: true                     # use batch normalization
+    temperature: 0.07                # InfoNCE temperature
+    reduction: mean                  # loss reduction: none | mean | sum
+    symmetric: true                  # use symmetric InfoNCE (audio->visual + visual->audio)
