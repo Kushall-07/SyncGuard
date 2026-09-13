@@ -2,6 +2,7 @@
 
 from src.training.checkpoint import load_checkpoint, save_checkpoint
 from src.training.spoof_trainer import SpoofTrainer
+from src.training.sync_trainer import SyncModel, SyncTrainer
 from src.training.trainer import Trainer
 from src.training.utils import (
     RunDirectory,
@@ -21,4 +22,6 @@ __all__ = [
     "load_checkpoint",
     "Trainer",
     "SpoofTrainer",
+    "SyncTrainer",
+    "SyncModel",
 ]

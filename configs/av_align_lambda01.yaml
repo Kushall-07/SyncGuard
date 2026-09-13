@@ -1,0 +1,264 @@
+# SyncGuard - Phase 12: Audio-Visual Synchronization + Contrastive Learning
+#
+# Phase 9:
+# Audio-visual temporal alignment using deterministic time-aware correspondence.
+#
+# Phase 10:
+# Bidirectional audio <-> visual cross-attention.
+#
+# Phase 11:
+# Self-supervised audio-visual synchronization using controlled temporal shifts.
+#
+# Phase 12:
+# Adds symmetric InfoNCE contrastive learning on adapted audio/visual
+# representations before cross-attention.
+#
+# IMPORTANT:
+# lambda_contrastive = 0.1 enables the combined objective:
+#
+#   L = L_sync + 0.1 * L_contrastive
+#
+# Frozen encoders:
+#   - Phase-5 shared AudioEncoder
+#   - Phase-8 VisualEncoder
+#
+# Trainable Phase-12 components:
+#   - AudioAdapter
+#   - VisualAdapter
+#   - AudioProjectionHead
+#   - VisualProjectionHead
+#   - Phase-10 Cross-Attention
+#   - Phase-11 SyncHead
+#
+# The adapters are active because contrastive learning is enabled.
+# The encoders remain frozen.
+
+# ============================================================
+# Audio preprocessing configuration
+# ============================================================
+
+audio:
+  sample_rate: 16000
+  mono: true
+  normalize: peak
+  norm_target: 1.0
+
+  mel:
+    n_fft: 400
+    hop_length: 160
+    win_length: 400
+    n_mels: 80
+    f_min: 0.0
+    f_max: 8000.0
+    power: 2.0
+    center: true
+    log: true
+    log_top_db: 80.0
+
+
+# ============================================================
+# Experiment configuration
+# ============================================================
+
+experiment:
+  name: sync-phase12-lambda01
+  seed: 42
+  deterministic: false
+  output_root: outputs/runs
+
+
+# ============================================================
+# Training configuration
+# ============================================================
+
+training:
+  batch_size: 32
+  learning_rate: 0.0003
+  weight_decay: 0.0001
+
+  epochs: 120
+  num_workers: 2
+
+  amp: true
+  grad_accum_steps: 1
+  grad_clip_norm: 5.0
+
+  monitor: val_video_sync_auc
+  monitor_mode: max
+
+  early_stopping_patience: 0
+
+  scheduler: cosine
+  warmup_epochs: 8
+
+  # Probability of constructing a negative temporal-shift pair.
+  negative_pair_probability: 0.5
+
+  # Phase 12 combined loss:
+  #
+  # L = L_sync + lambda_contrastive * L_contrastive
+  #
+  # λ = 0.1 for this experiment.
+  lambda_contrastive: 0.1
+
+
+# ============================================================
+# Audio-Visual alignment + fusion
+# ============================================================
+
+av_align:
+
+  # ----------------------------------------------------------
+  # Frozen encoder checkpoints
+  # ----------------------------------------------------------
+
+  # Phase-5 shared CNN + Transformer audio representation encoder.
+  # IMPORTANT: this must be the cnn_transformer encoder,
+  # not the score-level ensemble.
+  audio_encoder_pt: outputs/runs/spoof-transformer-20260906-123646/checkpoints/audio_encoder.pt
+
+  # Phase-8 exported visual Transformer encoder.
+  visual_encoder_pt: outputs/runs/deepfake-transformer-final-20260908-210034/checkpoints/visual_encoder.pt
+
+  audio_variant_required: cnn_transformer
+
+
+  # ----------------------------------------------------------
+  # Phase 9 - Temporal alignment
+  # ----------------------------------------------------------
+
+  alignment:
+    policy: time_aware_correspondence
+
+    # One temporal bucket for every video frame.
+    target_grid: video_rate
+
+    # If a video bucket receives no overlapping audio token,
+    # use the nearest audio token by interval centre.
+    empty_bucket: nearest
+
+    # Window duration is determined from the clip FPS:
+    #
+    # window_seconds = num_video_tokens / FPS
+    #
+    window_seconds: per_clip_fps
+
+
+  # ----------------------------------------------------------
+  # Video representation
+  # ----------------------------------------------------------
+
+  video:
+    num_frames: 32
+    regions: face_mouth
+
+
+  # ==========================================================
+  # Phase 10 - Bidirectional Cross-Attention
+  # ==========================================================
+
+  cross_attention:
+    dim: 256
+    num_heads: 4
+
+    # One layer per direction.
+    n_layers: 1
+
+    ff_dim: 1024
+    dropout: 0.1
+
+    # Audio-query-visual and visual-query-audio outputs
+    # are fused using concatenation + projection.
+    fusion: concat_proj
+
+    # Encoders already provide positional information.
+    add_positional_encoding: false
+
+
+  # ==========================================================
+  # Phase 11 - Synchronization Head
+  # ==========================================================
+
+  sync_head:
+    hidden_dim: 128
+    dropout: 0.1
+
+    # Aggregate per-window synchronization scores
+    # into the video-level score.
+    aggregation: mean
+
+
+  # ==========================================================
+  # Phase 11 - Synchronization Loss
+  # ==========================================================
+
+  sync_loss:
+    pos_weight: null
+    reduction: mean
+
+
+  # ==========================================================
+  # Phase 11 - Temporal Pair Construction
+  # ==========================================================
+
+  sync_pairs:
+
+    # Positive pair:
+    #   shift = 0 seconds
+    #
+    # Negative pairs:
+    #   controlled audio temporal shifts.
+    shift_seconds:
+      - -2.0
+      - -1.0
+      - -0.5
+      - 0.5
+      - 1.0
+      - 2.0
+
+    shift_strategy: uniform
+
+    # Phase-5 audio encoder temporal resolution:
+    #
+    # hop_length / sample_rate
+    # = 160 / 16000
+    # = 0.01 seconds
+    #
+    audio_token_seconds: 0.01
+
+
+  # ==========================================================
+  # Phase 12 - Contrastive Learning
+  # ==========================================================
+
+  contrastive:
+
+    # IMPORTANT:
+    # Enabled for the λ=0.1 experiment.
+    enabled: true
+
+    # Projection dimensionality used for InfoNCE.
+    projection_dim: 128
+
+    # Hidden dimension inside the projection heads.
+    hidden_dim: 256
+
+    # Hidden dimension inside the trainable modality adapters.
+    adapter_hidden_dim: 256
+
+    dropout: 0.1
+
+    # Batch normalization in projection heads.
+    use_bn: true
+
+    # InfoNCE temperature.
+    temperature: 0.07
+
+    reduction: mean
+
+    # Symmetric objective:
+    #
+    # Audio -> Visual
+    # Visual -> Audio
+    #
+    symmetric: true
