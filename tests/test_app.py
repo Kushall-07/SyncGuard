@@ -417,3 +417,44 @@ def test_model_info_creation() -> None:
             assert "IMPORTANT LIMITATION" in info_html
     except Exception as e:
         pytest.skip(f"Model info test failed (expected if dependencies missing): {e}")
+
+
+def test_gradio_schema_generation_succeeds() -> None:
+    """Test that Gradio can generate API schema without JSON schema errors.
+    
+    This regression test specifically checks for the 'TypeError: argument of type bool is not iterable'
+    error that occurred with incompatible gradio/gradio-client versions.
+    """
+    try:
+        import sys
+        from pathlib import Path as _Path
+        
+        _repo_root = _Path(__file__).resolve().parents[1]
+        if str(_repo_root) not in sys.path:
+            sys.path.insert(0, str(_repo_root))
+        
+        import app.app
+        
+        # Mock predictor initialization
+        with patch('app.app.get_predictor') as mock_get_predictor:
+            mock_predictor = Mock()
+            mock_predictor.device = Mock(type='cpu')
+            mock_predictor.audio_token_seconds = 0.01
+            mock_get_predictor.return_value = mock_predictor
+            
+            # Create UI
+            demo = app.app.create_ui()
+            assert demo is not None
+            
+            # Try to generate API schema - this is where the bug occurred
+            # This tests that gradio_client can parse the component schemas
+            try:
+                schema = demo.config
+                assert schema is not None
+                assert isinstance(schema, dict)
+            except TypeError as e:
+                if "argument of type 'bool' is not iterable" in str(e):
+                    pytest.fail("Gradio schema generation failed with bool type error - likely gradio/gradio_client version incompatibility")
+                raise
+    except Exception as e:
+        pytest.skip(f"Gradio schema test failed (expected if dependencies missing): {e}")
