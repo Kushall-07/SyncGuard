@@ -138,4 +138,9 @@ webcolors==25.10.0
 webencodings==0.6.1
 websocket-client==1.9.2
 widgetsnbextension==4.0.16
-gradio==4.40.0
+gradio==6.27.0
+gradio_client==2.7.0
+huggingface-hub==1.31.0
+fastapi==0.141.1
+uvicorn==0.52.4
+python-multipart==0.0.32

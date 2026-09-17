@@ -3,6 +3,39 @@
 Audio-visual deepfake / spoof detection with a shared encoder feeding a later
 audio-visual synchronization model.
 
+## Run SyncGuard
+
+From the project root, in PowerShell:
+
+```powershell
+python .\app\app.py
+```
+
+This starts the FastAPI backend and the React/Vite frontend, waits for both to
+become ready, prints their URLs, and opens the app in your default browser.
+
+- Frontend: http://127.0.0.1:5173
+- Backend: http://127.0.0.1:8000
+- Health check: http://127.0.0.1:8000/api/health
+- Stop: press Ctrl+C
+
+The launcher automatically prefers the project's `.venv\Scripts\python.exe`
+for the backend, and reuses an already-running backend/frontend instead of
+starting a duplicate. If port 8000 or 5173 is occupied by something other
+than SyncGuard, it prints an error instead of touching that process.
+
+### Advanced: run backend and frontend manually
+
+```powershell
+# Backend (FastAPI), from the project root
+.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+
+# Frontend (Vite dev server), in a separate terminal
+cd frontend
+npm install   # first time only
+npm run dev
+```
+
 ## Project status
 
 | Track | State | Decision record |
