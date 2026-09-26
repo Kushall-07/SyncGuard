@@ -34,10 +34,19 @@ describe("routing", () => {
     expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent(/what you hear/i);
   });
 
-  it("renders the analyze page", async () => {
-    renderAt("/analyze");
-    expect(await screen.findByRole("heading", { name: /upload and analyze/i })).toBeInTheDocument();
-  });
+  it(
+    "renders the analyze page",
+    async () => {
+      renderAt("/analyze");
+      // Analyze is the heaviest lazy-loaded route (UploadDropzone, ScoreCard, SyncTimeline,
+      // AnalyzingState, RecentAnalyses); on a cold test run its dynamic import can take
+      // longer than the default 1000ms findBy* timeout, so it gets extra headroom here.
+      expect(
+        await screen.findByRole("heading", { name: /upload and analyze/i }, { timeout: 5000 }),
+      ).toBeInTheDocument();
+    },
+    10000,
+  );
 
   it("renders the technology page", async () => {
     renderAt("/technology");
