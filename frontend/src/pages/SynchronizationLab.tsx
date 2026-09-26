@@ -22,6 +22,7 @@ export default function SynchronizationLab() {
   const [results, setResults] = useState<ShiftResults>({});
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [samplesLoaded, setSamplesLoaded] = useState(false);
 
   useEffect(() => {
     fetchLabSamples()
@@ -30,7 +31,8 @@ export default function SynchronizationLab() {
         setShifts(res.available_shifts);
         if (res.samples.length > 0) setSelectedSample(res.samples[0].id);
       })
-      .catch(() => setLoadError("Unable to reach the SyncGuard backend to load lab samples."));
+      .catch(() => setLoadError("Unable to reach the SyncGuard backend to load lab samples."))
+      .finally(() => setSamplesLoaded(true));
   }, []);
 
   useEffect(() => {
@@ -96,6 +98,15 @@ export default function SynchronizationLab() {
       </div>
 
       {loadError && <p className="mt-10 text-sm text-copper-dark">{loadError}</p>}
+
+      {!loadError && samplesLoaded && samples.length === 0 && (
+        <p className="mt-10 text-sm opacity-60 max-w-xl">
+          No curated Synchronization Lab samples are available in this deployment. This
+          feature depends on locally cached LAV-DF sample clips, which are intentionally
+          excluded from deployed builds (see docs/datasets.md). Use the Analyze page with
+          your own audio-visual upload instead.
+        </p>
+      )}
 
       {samples.length > 0 && (
         <>

@@ -2,6 +2,18 @@
 // No scoring/labelling logic lives here — only the shapes the predictor's
 // dataclasses actually return (see src/inference/predictor.py).
 
+// In local development this is left unset, so requests stay relative
+// ("/api/...") and are handled by the Vite dev server proxy configured in
+// vite.config.ts (which forwards them to http://127.0.0.1:8000). In a
+// production build where the frontend and backend are deployed separately
+// (e.g. Vercel + a Docker-hosted API), set VITE_API_BASE_URL at build time to
+// the deployed backend's origin, e.g. https://syncguard-api.example.com.
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+
+function apiUrl(path: string): string {
+  return `${API_BASE_URL}${path}`;
+}
+
 export interface AudioOnlyResult {
   mode: "audio_only";
   predicted_label: "bonafide" | "spoof";
@@ -78,7 +90,7 @@ async function parseErrorDetail(res: Response): Promise<string> {
 }
 
 export async function checkHealth(): Promise<HealthStatus> {
-  const res = await fetch("/api/health");
+  const res = await fetch(apiUrl("/api/health"));
   if (!res.ok) throw new Error(await parseErrorDetail(res));
   return res.json();
 }
@@ -86,7 +98,7 @@ export async function checkHealth(): Promise<HealthStatus> {
 export async function analyzeAudio(file: File): Promise<AudioOnlyResult> {
   const form = new FormData();
   form.append("audio", file);
-  const res = await fetch("/api/analyze/audio", { method: "POST", body: form });
+  const res = await fetch(apiUrl("/api/analyze/audio"), { method: "POST", body: form });
   if (!res.ok) throw new Error(await parseErrorDetail(res));
   return res.json();
 }
@@ -100,19 +112,24 @@ export async function analyzeAV(
   form.append("video", video);
   if (audio) form.append("audio", audio);
   if (landmarks) form.append("landmarks", landmarks);
-  const res = await fetch("/api/analyze/av", { method: "POST", body: form });
+  const res = await fetch(apiUrl("/api/analyze/av"), { method: "POST", body: form });
   if (!res.ok) throw new Error(await parseErrorDetail(res));
   return res.json();
 }
 
 export async function fetchLabSamples(): Promise<LabSamplesResponse> {
-  const res = await fetch("/api/lab/samples");
+  const res = await fetch(apiUrl("/api/lab/samples"));
   if (!res.ok) throw new Error(await parseErrorDetail(res));
-  return res.json();
+  const data: LabSamplesResponse = await res.json();
+  // video_url comes back as a path relative to the API origin (e.g.
+  // "/api/lab/samples/004073/video"); resolve it against the same configured
+  // API base so it still loads when the frontend and backend are on different
+  // origins in production.
+  return { ...data, samples: data.samples.map((s) => ({ ...s, video_url: apiUrl(s.video_url) })) };
 }
 
 export async function runLabAnalysis(sampleId: string, shiftSeconds: number): Promise<SyncLabResult> {
-  const res = await fetch("/api/lab/analyze", {
+  const res = await fetch(apiUrl("/api/lab/analyze"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sample_id: sampleId, shift_seconds: shiftSeconds }),
