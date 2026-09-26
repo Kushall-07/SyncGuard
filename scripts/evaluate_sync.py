@@ -433,6 +433,14 @@ def main() -> int:
 
     args = parser.parse_args()
 
+    print("=== SyncGuard Controlled Temporal-Shift Synchronization Evaluation (LAV-DF) ===")
+    print("This is an artificial-shift experiment: positive = shift 0.0s, negative = a")
+    print("non-zero controlled audio delay introduced by this script. It measures")
+    print("sensitivity to artificial temporal misalignment, not real-world deepfake")
+    print("detection accuracy and not manipulation-content classification. For")
+    print("manipulation-category (real/audio-only/video-only/audio+video) statistics at")
+    print("native timing, see scripts/evaluate_av_independent.py instead.\n")
+
     # Set device
     device = torch.device(args.device)
     print(f"Using device: {device}")
@@ -679,6 +687,14 @@ def main() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     results = {
+        "evaluation_type": "controlled_temporal_shift_sync_eval",
+        "evaluation_note": (
+            "Positive class = shift 0.0s (native alignment). Negative class = a "
+            "non-zero CONTROLLED temporal shift introduced by this script, not a "
+            "naturally occurring deepfake artifact. Do not describe these negatives "
+            "as 'real deepfake negatives'. AUC is None where a shift condition has "
+            "only one class present (see per-shift n_valid_windows)."
+        ),
         "overall": asdict(overall_metrics),
         "overall_stats": overall_stats,
         "overall_category_stats": overall_category_stats,

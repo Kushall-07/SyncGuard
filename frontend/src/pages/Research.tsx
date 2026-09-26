@@ -91,32 +91,31 @@ export default function Research() {
 
         <Section title="AV Results">
           <p className="max-w-2xl text-sm opacity-70 leading-relaxed">
-            The sync head was evaluated on LAV-DF with controlled audio-video temporal shifts: a zero-shift
-            (naturally aligned) pair is treated as positive, and every non-zero shift is treated as negative.
-            Accuracy is therefore a measure of how well the model separates aligned pairs from artificially
-            shifted ones — not a measure of real-world deepfake detection accuracy. Natural, unmodified clips do
-            not provide independent synchronization ground truth in this setup, since each clip's own audio is
-            the only known-positive pairing available.
+            The sync head was evaluated on LAV-DF with controlled, artificial audio-video temporal shifts: a
+            zero-shift (natively aligned) pair is treated as positive, and every non-zero shift — introduced by
+            the evaluation script itself, not a naturally occurring deepfake artifact — is treated as negative.
+            The mean sync score below is therefore a measure of sensitivity to artificial temporal misalignment,
+            not a measure of real-world deepfake detection accuracy. Natural, unmodified clips do not provide
+            independent synchronization ground truth in this setup, since each clip's own audio is the only
+            known-positive pairing available.
           </p>
           <div className="mt-8 overflow-x-auto border" style={{ borderColor: "var(--page-border)" }}>
-            <table className="w-full text-sm min-w-[480px]">
+            <table className="w-full text-sm min-w-[420px]">
               <thead>
                 <tr className="border-b" style={{ borderColor: "var(--page-border)" }}>
                   <th className="text-left font-normal opacity-60 uppercase text-xs tracking-widest px-5 py-3">
                     Audio Shift
                   </th>
                   <th className="text-left font-normal opacity-60 uppercase text-xs tracking-widest px-5 py-3">
-                    Window Accuracy
-                  </th>
-                  <th className="text-left font-normal opacity-60 uppercase text-xs tracking-widest px-5 py-3">
-                    Video-Level Accuracy
+                    Mean Sync Score
                   </th>
                 </tr>
               </thead>
               <tbody>
-                <DataRow col1="0.0s (aligned)" col2="100.0%" col3="100.0%" />
-                <DataRow col1="+0.5s" col2="82.9%" col3="86.7%" />
-                <DataRow col1="+1.0s" col2="94.0%" col3="96.0%" />
+                <DataRow col1="0.0s (aligned)" col2="0.9909" />
+                <DataRow col1="+0.5s" col2="0.2545" />
+                <DataRow col1="+1.0s" col2="0.1552" />
+                <DataRow col1="+2.0s" col2="0.0000" />
               </tbody>
             </table>
           </div>
@@ -124,6 +123,14 @@ export default function Research() {
             Phase 11 controlled shift-sensitivity evaluation, LAV-DF dev split, 1,000 clips. Negative shifts are
             not evaluable under this alignment scheme (zero valid overlapping windows) and are excluded from the
             Synchronization Lab for the same reason.
+          </p>
+          <p className="mt-6 max-w-2xl text-sm opacity-70 leading-relaxed">
+            A separate, independent check runs the same frozen pipeline at native (unshifted) timing over LAV-DF
+            clips grouped by manipulation category rather than by artificial shift. Real, audio-only-fake,
+            video-only-fake, and audio+video-fake clips all score within ≈0.001 of each other (~0.991 mean sync
+            score, n=250 per category), confirming that manipulation is not treated as desynchronization by this
+            model — content manipulation without temporal misalignment is not what the sync head is designed to
+            detect. See <code className="opacity-80">docs/experiments.md</code> (Section 3.3) for the full table.
           </p>
         </Section>
 
@@ -231,12 +238,12 @@ function ResultRow({ model, auc, eer, emphasis = false }: { model: string; auc: 
   );
 }
 
-function DataRow({ col1, col2, col3 }: { col1: string; col2: string; col3: string }) {
+function DataRow({ col1, col2, col3 }: { col1: string; col2: string; col3?: string }) {
   return (
     <tr className="border-b last:border-b-0" style={{ borderColor: "var(--page-border)" }}>
       <td className="px-5 py-3">{col1}</td>
       <td className="px-5 py-3 font-display">{col2}</td>
-      <td className="px-5 py-3 font-display">{col3}</td>
+      {col3 !== undefined && <td className="px-5 py-3 font-display">{col3}</td>}
     </tr>
   );
 }
