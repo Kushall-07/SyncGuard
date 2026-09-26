@@ -1,0 +1,54 @@
+# Production requirements for the SyncGuard FastAPI backend (CPU inference only).
+#
+# This is a deliberately pruned subset of requirements.txt (the full local dev
+# environment freeze), containing only what backend/main.py and
+# src/inference/predictor.py actually import, transitively, at runtime:
+#   - FastAPI web server + file upload handling
+#   - CPU-only PyTorch / torchaudio for the frozen audio+visual models
+#   - MediaPipe for on-the-fly face/mouth landmark extraction
+#   - PyAV for decoding uploaded video (audio-visual mode)
+#   - soundfile for audio I/O
+#   - PyYAML for the sync model's config file
+#
+# Deliberately excluded: Jupyter, pytest, matplotlib/seaborn, scikit-learn,
+# librosa, numba, pandas, torchvision, CUDA wheels, and every other
+# training/notebook/experiment-only package in requirements.txt. None of these
+# are imported by the inference path (verified by tracing every import in
+# backend/main.py -> src/inference/predictor.py -> src/models/**,
+# src/preprocessing/**, src/features/**, src/config.py, and the lazy MediaPipe
+# landmarker import in scripts/extract_celebdf_landmarks.py).
+#
+# PyTorch CPU wheels are not on the default PyPI index; the extra index below
+# supplies them. Versions match requirements.txt exactly (torch 2.13.0,
+# torchaudio 2.11.0 as pinned there) — only the local CUDA build tag
+# ("+cu130") is dropped, since that build does not exist for CPU wheels.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+torch==2.13.0
+torchaudio==2.11.0
+
+fastapi==0.141.1
+starlette==1.6.0
+uvicorn==0.52.4
+pydantic==2.13.5
+python-multipart==0.0.32
+
+numpy==2.4.6
+PyYAML==6.0.3
+soundfile==0.14.0
+av==18.1.0
+mediapipe==0.10.35
+
+# Not called by any inference code path, but required for the backend to
+# import at all: predictor.py imports src.training.utils (get_device/
+# set_seed), and importing that subpackage's __init__.py eagerly imports
+# SpoofTrainer -> src.evaluation.metrics -> sklearn (confirmed by an actual
+# container startup failure — ModuleNotFoundError: No module named 'sklearn'
+# — during deployment testing). The same import chain also pulls in
+# src.evaluation.visualization -> matplotlib; pinned explicitly here rather
+# than left to whatever version mediapipe happens to resolve as its own
+# transitive dependency. Since src/training/ and src/evaluation/ are frozen
+# (out of scope for this deployment phase), this is fixed here rather than by
+# editing those packages' __init__.py import graph.
+scikit-learn==1.9.0
+matplotlib==3.11.1

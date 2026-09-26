@@ -1,0 +1,63 @@
+# Keep the build context small and dataset-free. The Dockerfile COPYs only a
+# curated set of checkpoint files explicitly by path (see Dockerfile comments);
+# everything else under outputs/ and data/ must never reach the build context,
+# let alone an image layer.
+
+.git/
+.gitignore
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.claude/
+
+# Datasets: never shipped in any image (see docs/datasets.md).
+data/
+
+# Training/experiment artifacts: only 4 specific run directories' checkpoint
+# files are actually COPYed in the Dockerfile (see its comments for exactly
+# which ones and why). Everything else under outputs/ (dozens of other runs,
+# training logs, analysis/, data/, audio/) is excluded from the build context
+# entirely — not just from the image — to keep `docker build` fast.
+#
+# Docker note: exceptions ("!") don't work if the parent directory itself is
+# excluded, so this excludes each run directory individually via `outputs/runs/*`
+# rather than `outputs/runs/` — that lets the two `!...` lines below re-include
+# just the 4 needed run directories (and everything under them; the Dockerfile
+# itself still only COPYs the 2 files actually needed from each).
+outputs/analysis/
+outputs/data/
+outputs/audio/
+outputs/runs/*
+!outputs/runs/spoof-transformer-20260906-123646
+!outputs/runs/spoof-transformer-20260906-123646/**
+!outputs/runs/spoof-cnn-baseline-20260906-104508
+!outputs/runs/spoof-cnn-baseline-20260906-104508/**
+!outputs/runs/deepfake-transformer-final-20260908-210034
+!outputs/runs/deepfake-transformer-final-20260908-210034/**
+!outputs/runs/sync-phase12-lambda01-20260913-115101
+!outputs/runs/sync-phase12-lambda01-20260913-115101/**
+
+# Frontend: built separately for the primary (Vercel + Docker backend) target,
+# so its source/tooling is never needed in this image. frontend/dist/ is
+# intentionally NOT excluded here (even though the default Dockerfile doesn't
+# COPY it) so the optional single-container mode documented in README.md can
+# add one COPY line without also having to edit this file.
+frontend/node_modules/
+frontend/src/
+frontend/*.config.*
+frontend/tsconfig*.json
+
+# Tests, notebooks, docs: not needed at runtime.
+tests/
+notebooks/
+docs/
+*.md
+
+# Local/dev-only files.
+*.local
+.env
+.env.*
+!.env.production.example
+Dockerfile
+.dockerignore

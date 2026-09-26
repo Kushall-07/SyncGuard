@@ -13,6 +13,7 @@ front ends stay backed by the identical model weights and config.
 from __future__ import annotations
 
 import logging
+import os
 import sys
 import tempfile
 from dataclasses import asdict
@@ -34,18 +35,29 @@ from src.inference import SyncGuardPredictor  # noqa: E402
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Checkpoint paths (identical to app/app.py — do not diverge from the working demo).
-CHECKPOINT_DIR = _repo_root / "outputs" / "runs"
+# Checkpoint/config/data locations are configurable via environment variables so the
+# identical code runs unmodified on both local Windows (defaults below, matching
+# app/app.py exactly) and a Linux container (e.g. SYNCGUARD_CHECKPOINT_DIR=/app/checkpoints).
+# No ML behavior changes with these overrides — only where files are read from disk.
+CHECKPOINT_DIR = Path(os.environ.get("SYNCGUARD_CHECKPOINT_DIR", str(_repo_root / "outputs" / "runs")))
+CONFIG_DIR = Path(os.environ.get("SYNCGUARD_CONFIG_DIR", str(_repo_root / "configs")))
+DATA_DIR = Path(os.environ.get("SYNCGUARD_DATA_DIR", str(_repo_root / "data")))
+
 SPOOF_HEAD_PATH = CHECKPOINT_DIR / "spoof-transformer-20260906-123646" / "checkpoints" / "best.pt"
 VISUAL_ENCODER_PATH = CHECKPOINT_DIR / "deepfake-transformer-final-20260908-210034" / "checkpoints" / "visual_encoder.pt"
 SYNC_MODEL_PATH = CHECKPOINT_DIR / "sync-phase12-lambda01-20260913-115101" / "checkpoints" / "best.pt"
-SYNC_CONFIG_PATH = _repo_root / "configs" / "av_align_lambda01.yaml"
+SYNC_CONFIG_PATH = CONFIG_DIR / "av_align_lambda01.yaml"
 CNN_CHECKPOINT_PATH = CHECKPOINT_DIR / "spoof-cnn-baseline-20260906-104508" / "checkpoints" / "best.pt"
 
 # Synchronization Lab: a small curated set of LAV-DF clips that have precomputed
 # audio + MediaPipe landmarks on disk, so repeated shift experiments are fast and
 # don't require re-running audio extraction / MediaPipe per shift value.
-LAVDF_DIR = _repo_root / "data" / "lavdf"
+#
+# These are genuine LAV-DF dataset clips, so they are intentionally NOT shipped in
+# deployed container images (see docs/datasets.md). When absent, GET /api/lab/samples
+# degrades gracefully to an empty list — this is expected in a production deployment,
+# not a bug. Local development keeps working exactly as before.
+LAVDF_DIR = DATA_DIR / "lavdf"
 LAB_SAMPLES: dict[str, dict[str, Path]] = {
     "004073": {
         "video": LAVDF_DIR / "extracted" / "dev" / "004073.mp4",
@@ -78,9 +90,21 @@ UNEXPECTED_ERROR_DETAIL = "Unable to analyze this file. Please try again or choo
 
 app = FastAPI(title="SyncGuard API")
 
+# Local development origins are always allowed so `npm run dev` keeps working
+# unmodified. Production frontend origin(s) are added via SYNCGUARD_ALLOWED_ORIGINS
+# (comma-separated, e.g. "https://syncguard.example.com") rather than "*", so CORS
+# stays scoped to the deployed frontend's actual origin once it is known.
+_DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+_extra_origins = [
+    origin.strip()
+    for origin in os.environ.get("SYNCGUARD_ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
+]
+ALLOWED_ORIGINS = _DEV_ORIGINS + _extra_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -253,3 +277,34 @@ def lab_analyze(request: LabAnalyzeRequest) -> dict:
     except Exception as e:  # noqa: BLE001
         logger.exception("Unexpected error during sync lab analysis")
         raise HTTPException(status_code=500, detail=UNEXPECTED_ERROR_DETAIL) from e
+
+
+# ---------------------------------------------------------------------------
+# Optional single-container mode: serve the built React app from this same
+# FastAPI process, so one container can serve both the API and the frontend.
+#
+# This is entirely opt-in and additive: it only activates if a built frontend
+# is actually present at SYNCGUARD_FRONTEND_DIST (default frontend/dist/), and
+# it is registered LAST so every /api/* route above is always matched first —
+# the normal two-process dev workflow (`npm run dev` on :5173 + uvicorn on
+# :8000) is unaffected either way, since nothing here changes how those are run.
+_FRONTEND_DIST = Path(os.environ.get("SYNCGUARD_FRONTEND_DIST", str(_repo_root / "frontend" / "dist")))
+
+if _FRONTEND_DIST.is_dir():
+    logger.info(f"Serving built frontend from {_FRONTEND_DIST}")
+
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str) -> FileResponse:
+        """SPA fallback: serve a static asset if it exists, else index.html.
+
+        React Router handles client-side routes (e.g. /analyze, /research), so
+        any path that isn't a real file under dist/ still needs index.html, not
+        a 404 — except unmatched /api/* paths, which should stay a real 404
+        rather than silently returning HTML.
+        """
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not found")
+        candidate = _FRONTEND_DIST / full_path
+        if full_path and candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(_FRONTEND_DIST / "index.html")
