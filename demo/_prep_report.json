@@ -1,0 +1,735 @@
+{
+  "audio_spoof": [
+    [
+      "LA_E_1377817",
+      true,
+      "A07"
+    ],
+    [
+      "LA_E_9022151",
+      true,
+      "A08"
+    ],
+    [
+      "LA_E_7059509",
+      true,
+      "A09"
+    ],
+    [
+      "LA_E_9618181",
+      true,
+      "A10"
+    ],
+    [
+      "LA_E_2880143",
+      true,
+      "A11"
+    ],
+    [
+      "LA_E_7470134",
+      true,
+      "A12"
+    ],
+    [
+      "LA_E_9623991",
+      true,
+      "A13"
+    ],
+    [
+      "LA_E_6350690",
+      true,
+      "A14"
+    ],
+    [
+      "LA_E_5901852",
+      true,
+      "A15"
+    ],
+    [
+      "LA_E_9347781",
+      true,
+      "A16"
+    ],
+    [
+      "LA_E_8767294",
+      true,
+      "A17"
+    ],
+    [
+      "LA_E_5532379",
+      true,
+      "A18"
+    ],
+    [
+      "LA_E_1375694",
+      true,
+      "A19"
+    ],
+    [
+      "LA_E_7075609",
+      true,
+      "A07"
+    ],
+    [
+      "LA_E_3231713",
+      true,
+      "A08"
+    ],
+    [
+      "LA_E_4162132",
+      true,
+      "A09"
+    ],
+    [
+      "LA_E_4738200",
+      true,
+      "A10"
+    ],
+    [
+      "LA_E_3914737",
+      true,
+      "A11"
+    ],
+    [
+      "LA_E_6021301",
+      true,
+      "A12"
+    ],
+    [
+      "LA_E_8353646",
+      true,
+      "A13"
+    ],
+    [
+      "LA_E_5011077",
+      true,
+      "A14"
+    ],
+    [
+      "LA_E_1910354",
+      true,
+      "A15"
+    ],
+    [
+      "LA_E_9282182",
+      true,
+      "A16"
+    ],
+    [
+      "LA_E_8631160",
+      true,
+      "A17"
+    ],
+    [
+      "LA_E_3509957",
+      true,
+      "A18"
+    ]
+  ],
+  "audio_bonafide": [
+    [
+      "LA_E_6509076",
+      true,
+      "-"
+    ],
+    [
+      "LA_E_1198906",
+      true,
+      "-"
+    ],
+    [
+      "LA_E_8957409",
+      true,
+      "-"
+    ],
+    [
+      "LA_E_2453283",
+      true,
+      "-"
+    ],
+    [
+      "LA_E_5953449",
+      true,
+      "-"
+    ],
+    [
+      "LA_E_9288764",
+      true,
+      "-"
+    ],
+    [
+      "LA_E_5821734",
+      true,
+      "-"
+    ],
+    [
+      "LA_E_6544372",
+      true,
+      "-"
+    ],
+    [
+      "LA_E_2915068",
+      true,
+      "-"
+    ],
+    [
+      "LA_E_3793484",
+      true,
+      "-"
+    ],
+    [
+      "LA_E_7584998",
+      true,
+      "-"
+    ],
+    [
+      "LA_E_8579178",
+      true,
+      "-"
+    ],
+    [
+      "LA_E_5878191",
+      true,
+      "-"
+    ],
+    [
+      "LA_E_2232644",
+      true,
+      "-"
+    ],
+    [
+      "LA_E_3621170",
+      true,
+      "-"
+    ],
+    [
+      "LA_E_7796884",
+      true,
+      "-"
+    ],
+    [
+      "LA_E_4828197",
+      true,
+      "-"
+    ],
+    [
+      "LA_E_2161075",
+      true,
+      "-"
+    ],
+    [
+      "LA_E_9053445",
+      true,
+      "-"
+    ],
+    [
+      "LA_E_8123735",
+      true,
+      "-"
+    ],
+    [
+      "LA_E_3097724",
+      true,
+      "-"
+    ],
+    [
+      "LA_E_3758029",
+      true,
+      "-"
+    ],
+    [
+      "LA_E_5254282",
+      true,
+      "-"
+    ],
+    [
+      "LA_E_4518733",
+      true,
+      "-"
+    ],
+    [
+      "LA_E_7831898",
+      true,
+      "-"
+    ]
+  ],
+  "video_sync": [
+    {
+      "tag": "0001",
+      "source_sample_id": "016452",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 174,
+      "duration": "7.04"
+    },
+    {
+      "tag": "0002",
+      "source_sample_id": "045517",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 150,
+      "duration": "6.08"
+    },
+    {
+      "tag": "0003",
+      "source_sample_id": "005042",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 172,
+      "duration": "6.976"
+    },
+    {
+      "tag": "0004",
+      "source_sample_id": "121519",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 181,
+      "duration": "7.36"
+    },
+    {
+      "tag": "0005",
+      "source_sample_id": "004206",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 162,
+      "duration": "6.592"
+    },
+    {
+      "tag": "0006",
+      "source_sample_id": "016417",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 111,
+      "duration": "4.544"
+    },
+    {
+      "tag": "0007",
+      "source_sample_id": "132671",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 136,
+      "duration": "5.504"
+    },
+    {
+      "tag": "0008",
+      "source_sample_id": "016593",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 100,
+      "duration": "4.096"
+    },
+    {
+      "tag": "0009",
+      "source_sample_id": "024630",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 181,
+      "duration": "7.36"
+    },
+    {
+      "tag": "0010",
+      "source_sample_id": "123949",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 174,
+      "duration": "7.04"
+    },
+    {
+      "tag": "0011",
+      "source_sample_id": "060348",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 160,
+      "duration": "6.464"
+    },
+    {
+      "tag": "0012",
+      "source_sample_id": "117764",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 161,
+      "duration": "6.528"
+    },
+    {
+      "tag": "0013",
+      "source_sample_id": "132589",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 162,
+      "duration": "6.592"
+    },
+    {
+      "tag": "0014",
+      "source_sample_id": "023360",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 120,
+      "duration": "4.864"
+    },
+    {
+      "tag": "0015",
+      "source_sample_id": "006388",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 102,
+      "duration": "4.16"
+    },
+    {
+      "tag": "0016",
+      "source_sample_id": "097823",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 110,
+      "duration": "4.48"
+    },
+    {
+      "tag": "0017",
+      "source_sample_id": "109094",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 118,
+      "duration": "4.8"
+    },
+    {
+      "tag": "0018",
+      "source_sample_id": "063194",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 180,
+      "duration": "7.296"
+    },
+    {
+      "tag": "0019",
+      "source_sample_id": "058339",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 157,
+      "duration": "6.4"
+    },
+    {
+      "tag": "0020",
+      "source_sample_id": "067993",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 121,
+      "duration": "4.928"
+    },
+    {
+      "tag": "0021",
+      "source_sample_id": "084322",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 101,
+      "duration": "4.16"
+    },
+    {
+      "tag": "0022",
+      "source_sample_id": "060816",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 115,
+      "duration": "4.672"
+    },
+    {
+      "tag": "0023",
+      "source_sample_id": "063224",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 181,
+      "duration": "7.36"
+    },
+    {
+      "tag": "0024",
+      "source_sample_id": "060188",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 118,
+      "duration": "4.8"
+    },
+    {
+      "tag": "0025",
+      "source_sample_id": "117163",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 183,
+      "duration": "7.424"
+    }
+  ],
+  "video_desync": [
+    {
+      "tag": "0001",
+      "source_sample_id": "012059",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 117,
+      "duration": "4.8",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    },
+    {
+      "tag": "0002",
+      "source_sample_id": "045619",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 125,
+      "duration": "5.12",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    },
+    {
+      "tag": "0003",
+      "source_sample_id": "015775",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 154,
+      "duration": "6.272",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    },
+    {
+      "tag": "0004",
+      "source_sample_id": "055102",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 153,
+      "duration": "6.208",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    },
+    {
+      "tag": "0005",
+      "source_sample_id": "068240",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 141,
+      "duration": "5.76",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    },
+    {
+      "tag": "0006",
+      "source_sample_id": "068842",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 107,
+      "duration": "4.352",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    },
+    {
+      "tag": "0007",
+      "source_sample_id": "133517",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 176,
+      "duration": "7.104",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    },
+    {
+      "tag": "0008",
+      "source_sample_id": "123891",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 157,
+      "duration": "6.4",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    },
+    {
+      "tag": "0009",
+      "source_sample_id": "004283",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 162,
+      "duration": "6.592",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    },
+    {
+      "tag": "0010",
+      "source_sample_id": "012454",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 107,
+      "duration": "4.352",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    },
+    {
+      "tag": "0011",
+      "source_sample_id": "060176",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 104,
+      "duration": "4.224",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    },
+    {
+      "tag": "0012",
+      "source_sample_id": "058341",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 131,
+      "duration": "5.312",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    },
+    {
+      "tag": "0013",
+      "source_sample_id": "024244",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 107,
+      "duration": "4.352",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    },
+    {
+      "tag": "0014",
+      "source_sample_id": "035767",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 135,
+      "duration": "5.504",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    },
+    {
+      "tag": "0015",
+      "source_sample_id": "006658",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 115,
+      "duration": "4.672",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    },
+    {
+      "tag": "0016",
+      "source_sample_id": "036123",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 129,
+      "duration": "5.248",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    },
+    {
+      "tag": "0017",
+      "source_sample_id": "016233",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 115,
+      "duration": "4.672",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    },
+    {
+      "tag": "0018",
+      "source_sample_id": "071699",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 146,
+      "duration": "5.952",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    },
+    {
+      "tag": "0019",
+      "source_sample_id": "068248",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 137,
+      "duration": "5.568",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    },
+    {
+      "tag": "0020",
+      "source_sample_id": "122233",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 106,
+      "duration": "4.352",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    },
+    {
+      "tag": "0021",
+      "source_sample_id": "033996",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 153,
+      "duration": "6.208",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    },
+    {
+      "tag": "0022",
+      "source_sample_id": "062198",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 159,
+      "duration": "6.464",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    },
+    {
+      "tag": "0023",
+      "source_sample_id": "084694",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 123,
+      "duration": "4.992",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    },
+    {
+      "tag": "0024",
+      "source_sample_id": "068400",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 106,
+      "duration": "4.352",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    },
+    {
+      "tag": "0025",
+      "source_sample_id": "100774",
+      "video_ok": true,
+      "audio_ok": true,
+      "n_frames": 119,
+      "duration": "4.864",
+      "intended_shift_seconds": 0.5,
+      "measured_shift_seconds": 0.5,
+      "shift_verified": "True"
+    }
+  ]
+}
