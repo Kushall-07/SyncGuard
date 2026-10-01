@@ -21,6 +21,20 @@ describe("perWindowSeconds", () => {
   it("does not divide by zero for an empty score list", () => {
     expect(perWindowSeconds([], { window_seconds: 5 })).toBe(1);
   });
+
+  it("uses window_seconds directly (not divided) in windowed mode", () => {
+    // Windowed-mode scores are one per 32-frame window, not one per frame: each
+    // score already spans window_seconds = window_frames / fps.
+    expect(
+      perWindowSeconds([0.7, 0.6, 0.5], { av_inference_mode: "windowed", window_seconds: 1.28, fps: 25 }),
+    ).toBeCloseTo(1.28);
+  });
+
+  it("still uses 1/fps for legacy_full_clip mode", () => {
+    expect(
+      perWindowSeconds([0.7, 0.6], { av_inference_mode: "legacy_full_clip", fps: 25, window_seconds: 0.08 }),
+    ).toBeCloseTo(0.04);
+  });
 });
 
 describe("buildTimelineData", () => {
@@ -36,6 +50,24 @@ describe("buildTimelineData", () => {
   it("handles a single window without error", () => {
     const data = buildTimelineData([0.5], { fps: 25 });
     expect(data).toEqual([{ time: 0, score: 0.5, index: 0 }]);
+  });
+
+  it("uses each window's real start_time when windows metadata is present", () => {
+    const data = buildTimelineData([0.8, 0.6, 0.5], {
+      av_inference_mode: "windowed",
+      window_seconds: 1.28,
+      fps: 25,
+      windows: [
+        { index: 0, start_time: 0, end_time: 1.28, n_valid_frames: 32, valid_fraction: 1, sync_score: 0.8, desync_score: 0.2 },
+        { index: 1, start_time: 1.28, end_time: 2.56, n_valid_frames: 32, valid_fraction: 1, sync_score: 0.6, desync_score: 0.4 },
+        { index: 2, start_time: 2.56, end_time: 3.4, n_valid_frames: 21, valid_fraction: 0.65625, sync_score: 0.5, desync_score: 0.5 },
+      ],
+    });
+    expect(data).toEqual([
+      { time: 0, score: 0.8, index: 0 },
+      { time: 1.28, score: 0.6, index: 1 },
+      { time: 2.56, score: 0.5, index: 2 },
+    ]);
   });
 });
 

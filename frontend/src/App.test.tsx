@@ -1,7 +1,29 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+
+// Every route but Home is code-split via React.lazy() (see App.tsx). Rendering
+// a route for the first time races that route's dynamic import() against
+// testing-library's default findBy* timeout - how long that import takes
+// depends on Vite's test-transform/module-cache state, not on anything the
+// test controls, which is exactly what made this suite flaky (it previously
+// "fixed" this by giving only the heaviest route, Analyze, a bigger timeout -
+// a band-aid on the symptom, not the race). Importing every lazy page once,
+// up front, before any test renders a route removes the race entirely: by
+// the time `lazy(() => import(...))` runs during render, the module is
+// already in the cache and resolves effectively synchronously.
+beforeAll(async () => {
+  await Promise.all([
+    import("./pages/Analyze"),
+    import("./pages/Technology"),
+    import("./pages/Research"),
+    import("./pages/About"),
+    import("./pages/Results"),
+    import("./pages/SynchronizationLab"),
+    import("./pages/Reproducibility"),
+  ]);
+});
 
 // Nav calls /api/health and the Lab page calls /api/lab/samples on mount; stub fetch
 // so route smoke tests don't depend on a running backend.
@@ -34,19 +56,10 @@ describe("routing", () => {
     expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent(/what you hear/i);
   });
 
-  it(
-    "renders the analyze page",
-    async () => {
-      renderAt("/analyze");
-      // Analyze is the heaviest lazy-loaded route (UploadDropzone, ScoreCard, SyncTimeline,
-      // AnalyzingState, RecentAnalyses); on a cold test run its dynamic import can take
-      // longer than the default 1000ms findBy* timeout, so it gets extra headroom here.
-      expect(
-        await screen.findByRole("heading", { name: /upload and analyze/i }, { timeout: 5000 }),
-      ).toBeInTheDocument();
-    },
-    10000,
-  );
+  it("renders the analyze page", async () => {
+    renderAt("/analyze");
+    expect(await screen.findByRole("heading", { name: /upload and analyze/i })).toBeInTheDocument();
+  });
 
   it("renders the technology page", async () => {
     renderAt("/technology");
