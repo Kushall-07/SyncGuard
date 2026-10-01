@@ -26,6 +26,16 @@ export interface AudioOnlyResult {
   use_ensemble: boolean;
 }
 
+export interface AVWindowMetadata {
+  index: number;
+  start_time: number;
+  end_time: number;
+  n_valid_frames: number;
+  valid_fraction: number;
+  sync_score: number;
+  desync_score: number;
+}
+
 export interface AVTimingMetadata {
   fps?: number;
   num_frames?: number;
@@ -33,6 +43,17 @@ export interface AVTimingMetadata {
   audio_token_seconds?: number;
   num_valid_landmark_frames?: number;
   num_windows?: number;
+  // Present once the backend runs windowed inference (see
+  // src/inference/predictor.py); absent (or "legacy_full_clip") for the
+  // pre-windowing full-clip path, kept as a fallback/reference mode.
+  av_inference_mode?: "windowed" | "legacy_full_clip";
+  window_frames?: number;
+  stride_frames?: number;
+  total_duration_seconds?: number;
+  windows?: AVWindowMetadata[];
+  aggregate_method?: string;
+  median_window_score?: number;
+  valid_weighted_window_score?: number;
 }
 
 export interface AudioVisualResult {
