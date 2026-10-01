@@ -45,9 +45,30 @@ DATA_DIR = Path(os.environ.get("SYNCGUARD_DATA_DIR", str(_repo_root / "data")))
 
 SPOOF_HEAD_PATH = CHECKPOINT_DIR / "spoof-transformer-20260906-123646" / "checkpoints" / "best.pt"
 VISUAL_ENCODER_PATH = CHECKPOINT_DIR / "deepfake-transformer-final-20260908-210034" / "checkpoints" / "visual_encoder.pt"
-SYNC_MODEL_PATH = CHECKPOINT_DIR / "sync-phase12-lambda01-20260913-115101" / "checkpoints" / "best.pt"
-SYNC_CONFIG_PATH = CONFIG_DIR / "av_align_lambda01.yaml"
+# AV sync checkpoint: physically-shift-trained (see docs/decisions/0006-physical-sync-training.md
+# and the sync-detection-fix final report) replaces the original Phase 12 token-shift
+# checkpoint as the production default. The OLD checkpoint/config are left on disk,
+# untouched, for comparison (SYNCGUARD_SYNC_MODEL_PATH / SYNCGUARD_SYNC_CONFIG_PATH env
+# vars can point back at them without any code change):
+#   old: outputs/runs/sync-phase12-lambda01-20260913-115101/checkpoints/best.pt
+#        + configs/av_align_lambda01.yaml
+SYNC_MODEL_PATH = Path(os.environ.get(
+    "SYNCGUARD_SYNC_MODEL_PATH",
+    str(CHECKPOINT_DIR / "sync-physical-v2-20260927-020548" / "checkpoints" / "best.pt"),
+))
+SYNC_CONFIG_PATH = Path(os.environ.get(
+    "SYNCGUARD_SYNC_CONFIG_PATH", str(CONFIG_DIR / "av_align_physical.yaml"),
+))
 CNN_CHECKPOINT_PATH = CHECKPOINT_DIR / "spoof-cnn-baseline-20260906-104508" / "checkpoints" / "best.pt"
+
+# AV inference regime (see docs/windowed_av_inference.md for the full A/B evidence
+# behind this default). "windowed" tiles a clip into num_frames-sized windows
+# matching the model's trained/evaluated temporal regime; "legacy_full_clip" feeds
+# the entire variable-length clip through as one sequence (kept as a fallback /
+# reference, never removed). Override via env var without touching model code.
+AV_INFERENCE_MODE = os.environ.get("SYNCGUARD_AV_INFERENCE_MODE", "windowed")
+AV_WINDOW_FRAMES = int(os.environ.get("SYNCGUARD_AV_WINDOW_FRAMES", "32"))
+AV_STRIDE_FRAMES = int(os.environ.get("SYNCGUARD_AV_STRIDE_FRAMES", "32"))
 
 # Synchronization Lab: a small curated set of LAV-DF clips that have precomputed
 # audio + MediaPipe landmarks on disk, so repeated shift experiments are fast and
@@ -121,6 +142,9 @@ def get_predictor() -> SyncGuardPredictor:
             spoof_head_checkpoint=SPOOF_HEAD_PATH,
             cnn_checkpoint=CNN_CHECKPOINT_PATH,
             device="auto",
+            av_inference_mode=AV_INFERENCE_MODE,
+            window_frames=AV_WINDOW_FRAMES,
+            stride_frames=AV_STRIDE_FRAMES,
         )
         logger.info(f"Predictor initialized on device: {_predictor.device}")
     return _predictor
@@ -173,7 +197,7 @@ def health() -> dict:
 
 
 @app.post("/api/analyze/audio")
-async def analyze_audio(audio: UploadFile = File(...)) -> dict:
+def analyze_audio(audio: UploadFile = File(...)) -> dict:
     suffix = Path(audio.filename or "audio.wav").suffix or ".wav"
     tmp_path = _save_upload(audio, suffix)
     try:
@@ -192,7 +216,7 @@ async def analyze_audio(audio: UploadFile = File(...)) -> dict:
 
 
 @app.post("/api/analyze/av")
-async def analyze_av(
+def analyze_av(
     video: UploadFile = File(...),
     audio: UploadFile | None = None,
     landmarks: UploadFile | None = None,

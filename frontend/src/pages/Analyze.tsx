@@ -371,7 +371,14 @@ function AvResultPanel({
         <Meta label="Duration" value={duration ? `${duration.toFixed(1)}s` : "—"} />
         <Meta label="Windows Analyzed" value={meta?.num_windows?.toString() ?? "—"} />
         <Meta label="Frame Rate" value={meta?.fps ? `${meta.fps.toFixed(1)} fps` : "—"} />
-        <Meta label="Analysis Mode" value="Audio-Visual" />
+        <Meta
+          label="Temporal Analysis"
+          value={
+            meta?.av_inference_mode === "windowed" && meta.window_frames
+              ? `Windowed (${meta.window_frames}f)`
+              : "Full clip"
+          }
+        />
       </div>
 
       <p className="mt-8 text-xs leading-relaxed opacity-60 border-l-2 pl-4" style={{ borderColor: "var(--sage)" }}>
