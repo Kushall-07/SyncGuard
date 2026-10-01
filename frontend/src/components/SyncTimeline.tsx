@@ -107,7 +107,7 @@ export default function SyncTimeline({ scores, metadata, onSeek, selectedTime }:
               {data.map((entry) => (
                 <Cell
                   key={entry.index}
-                  fill={entry.score >= THRESHOLD ? "#7c9478" : "#ab7440"}
+                  fill={entry.score >= THRESHOLD ? "#22d3ee" : "#f59e0b"}
                   fillOpacity={selectedTime != null && Math.abs(entry.time - selectedTime) < stepSeconds ? 1 : 0.85}
                   stroke={
                     selectedTime != null && Math.abs(entry.time - selectedTime) < stepSeconds
@@ -123,8 +123,8 @@ export default function SyncTimeline({ scores, metadata, onSeek, selectedTime }:
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs opacity-60">
-        <LegendDot color="#7c9478" label={`At/above threshold (${THRESHOLD})`} />
-        <LegendDot color="#ab7440" label="Below threshold" />
+        <LegendDot color="#22d3ee" label={`At/above threshold (${THRESHOLD})`} />
+        <LegendDot color="#f59e0b" label="Below threshold" />
         <span className="inline-flex items-center gap-1.5">
           <span className="inline-block w-3 border-t border-dashed" style={{ borderColor: "var(--page-muted)" }} />
           Reference threshold

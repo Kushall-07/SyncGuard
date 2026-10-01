@@ -4,34 +4,52 @@ export default {
   theme: {
     extend: {
       colors: {
-        ink: "#14170f",
-        forest: {
-          DEFAULT: "#132018",
-          light: "#1c2e23",
+        canvas: {
+          DEFAULT: "#0a0b0e",
+          raised: "#12141a",
+          elevated: "#181b22",
         },
-        ivory: "#f6f1e7",
-        stone: {
-          DEFAULT: "#e7ddc9",
-          dark: "#d8cbae",
+        ink: {
+          DEFAULT: "#edeff3",
+          soft: "#8d96a8",
+          faint: "#5b6270",
         },
+        signal: {
+          DEFAULT: "#22d3ee",
+          light: "#67e8f9",
+          dark: "#0e9bb3",
+        },
+        anomaly: {
+          DEFAULT: "#f59e0b",
+          light: "#fbbf65",
+          dark: "#b9770a",
+        },
+        fusion: {
+          DEFAULT: "#8b7cf6",
+          light: "#ab9ff9",
+          dark: "#6657d6",
+        },
+        // Legacy aliases kept so every page built on the old editorial theme
+        // (sage = positive/synchronized, copper = warning/anomaly) resolves
+        // straight onto the new dark forensic palette without a rename pass.
         sage: {
-          DEFAULT: "#7c9478",
-          light: "#a3b89e",
-          dark: "#5f7a5d",
+          DEFAULT: "#22d3ee",
+          light: "#67e8f9",
+          dark: "#0e9bb3",
         },
         copper: {
-          DEFAULT: "#ab7440",
-          light: "#c69361",
-          dark: "#8a5c30",
+          DEFAULT: "#f59e0b",
+          light: "#fbbf65",
+          dark: "#b9770a",
         },
       },
       fontFamily: {
-        display: ["'Fraunces'", "serif"],
+        display: ["'Space Grotesk'", "system-ui", "sans-serif"],
         body: ["'Inter'", "system-ui", "sans-serif"],
         mono: ["'JetBrains Mono'", "monospace"],
       },
       transitionTimingFunction: {
-        editorial: "cubic-bezier(0.22, 1, 0.36, 1)",
+        editorial: "cubic-bezier(0.23, 1, 0.32, 1)",
       },
     },
   },

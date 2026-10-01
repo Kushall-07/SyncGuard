@@ -13,8 +13,8 @@ export default function RecentAnalyses({ refreshKey }: { refreshKey: number }) {
   if (entries.length === 0) return null;
 
   return (
-    <div className="mt-20 border-t pt-10" style={{ borderColor: "var(--page-border)" }}>
-      <p className="text-xs uppercase tracking-widest opacity-60 mb-4">Recent Analyses</p>
+    <div className="mt-24 border-t pt-10" style={{ borderColor: "var(--page-border)" }}>
+      <p className="font-mono text-xs uppercase tracking-[0.25em] text-signal/80 mb-5">Recent Analyses</p>
       <div className="flex flex-col divide-y" style={{ borderColor: "var(--page-border)" }}>
         {entries.map((entry) => {
           const cached = getSessionResult(entry.id);
@@ -28,14 +28,14 @@ export default function RecentAnalyses({ refreshKey }: { refreshKey: number }) {
                   state: { result: cached, mode: entry.mode, filename: entry.filename },
                 })
               }
-              className="w-full flex items-center justify-between gap-4 py-3 text-left text-sm disabled:cursor-not-allowed disabled:opacity-40 hover:opacity-100 opacity-80 transition-opacity"
+              className="w-full flex items-center justify-between gap-4 py-4 text-left text-sm disabled:cursor-not-allowed disabled:opacity-40 hover:text-signal opacity-90 hover:opacity-100 transition-colors"
               style={{ borderColor: "var(--page-border)" }}
               title={cached ? "Reopen this result" : "Full result no longer available this session"}
             >
-              <span className="truncate">{entry.filename}</span>
-              <span className="shrink-0 opacity-60">{entry.resultLabel}</span>
-              <span className="shrink-0 font-display">{(entry.score * 100).toFixed(1)}%</span>
-              <span className="shrink-0 text-xs opacity-40 hidden sm:inline">
+              <span className="truncate font-display text-base">{entry.filename}</span>
+              <span className="shrink-0 font-mono text-xs uppercase tracking-wide text-ink-soft">{entry.resultLabel}</span>
+              <span className="shrink-0 font-display text-lg">{(entry.score * 100).toFixed(1)}%</span>
+              <span className="shrink-0 font-mono text-[11px] text-ink-faint hidden sm:inline">
                 {new Date(entry.timestamp).toLocaleTimeString()}
               </span>
             </button>

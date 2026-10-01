@@ -3,9 +3,12 @@ import { useNavigate } from "react-router-dom";
 import Button from "../components/Button";
 import UploadDropzone from "../components/UploadDropzone";
 import ScoreCard from "../components/ScoreCard";
+import RadialGauge from "../components/RadialGauge";
+import MediaFrame from "../components/MediaFrame";
 import SyncTimeline from "../components/SyncTimeline";
 import AnalyzingState from "../components/AnalyzingState";
 import RecentAnalyses from "../components/RecentAnalyses";
+import Reveal from "../components/scroll/Reveal";
 import { analyzeAudio, analyzeAV } from "../services/api";
 import type { AudioOnlyResult, AudioVisualResult } from "../services/api";
 import { cacheSessionResult, pushHistoryEntry } from "../lib/report";
@@ -118,14 +121,17 @@ export default function Analyze() {
   };
 
   return (
-    <div className="container-page py-16">
-      <p className="text-xs uppercase tracking-[0.2em] opacity-60">Analyze Media</p>
-      <h1 className="font-display text-4xl md:text-5xl mt-3">Upload and analyze</h1>
-      <p className="mt-4 max-w-xl opacity-70">
-        Detect synthetic speech or examine audio-visual synchronization.
-      </p>
+    <div className="container-page py-8 md:py-12 bg-grain relative">
+      <Reveal>
+        <p className="font-mono text-xs uppercase tracking-[0.3em] text-signal/80">SyncGuard // Workspace</p>
+        <h1 className="font-display text-4xl sm:text-5xl md:text-6xl mt-3">Analyze media</h1>
+        <p className="mt-3 max-w-xl text-sm sm:text-base text-ink-soft leading-relaxed">
+          Detect synthetic speech, or examine audio-visual synchronization with the real inference
+          pipeline — the same one described in the technology pages.
+        </p>
+      </Reveal>
 
-      <div className="mt-10 flex gap-2 border-b" style={{ borderColor: "var(--page-border)" }}>
+      <Reveal className="mt-6 flex gap-1 border-b border-[color:var(--page-border)]">
         {(
           [
             { key: "av", label: "Video / Audio + Visual" },
@@ -135,26 +141,20 @@ export default function Analyze() {
           <button
             key={tab.key}
             onClick={() => switchMode(tab.key)}
-            className={`px-5 py-3 text-sm transition-colors duration-200 border-b-2 -mb-px ${
-              mode === tab.key ? "border-sage" : "border-transparent opacity-60 hover:opacity-100"
+            className={`px-5 py-3 font-mono text-xs sm:text-sm uppercase tracking-[0.1em] transition-colors duration-200 border-b-2 -mb-px ${
+              mode === tab.key ? "border-signal text-signal" : "border-transparent text-ink-faint hover:text-ink-soft"
             }`}
           >
             {tab.label}
           </button>
         ))}
-      </div>
+      </Reveal>
 
       {mode === "av" ? (
-        <div className="mt-10 grid md:grid-cols-2 gap-10">
+        <div className="mt-6 grid lg:grid-cols-2 gap-10 lg:gap-12">
           <div>
             {videoUrl ? (
-              <video
-                ref={videoRef}
-                src={videoUrl}
-                controls
-                className="w-full border"
-                style={{ borderColor: "var(--page-border)" }}
-              />
+              <MediaFrame src={videoUrl} label="Video Source" videoRef={videoRef} />
             ) : (
               <UploadDropzone
                 label="Drop your video here"
@@ -164,10 +164,10 @@ export default function Analyze() {
                 onSelect={setVideoFile}
               />
             )}
-            <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2">
+            <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2">
               {videoFile && (
                 <button
-                  className="text-xs opacity-60 hover:opacity-100 underline"
+                  className="font-mono text-xs uppercase tracking-wide text-ink-faint hover:text-signal underline underline-offset-4"
                   onClick={() => {
                     setVideoFile(null);
                     setAvResult(null);
@@ -178,7 +178,7 @@ export default function Analyze() {
               )}
 
               <button
-                className="text-xs uppercase tracking-widest opacity-60 hover:opacity-100"
+                className="font-mono text-xs uppercase tracking-[0.15em] text-ink-faint hover:text-signal"
                 onClick={() => setShowAdvanced((v) => !v)}
               >
                 {showAdvanced ? "Hide" : "Show"} advanced options
@@ -203,7 +203,7 @@ export default function Analyze() {
               </div>
             )}
 
-            <Button className="mt-8 w-full sm:w-auto" disabled={!videoFile || loading} onClick={runAv}>
+            <Button className="mt-4 w-full sm:w-auto" disabled={!videoFile || loading} onClick={runAv}>
               {loading ? "Analyzing…" : "Run AV Analysis →"}
             </Button>
             {error && (
@@ -237,7 +237,7 @@ export default function Analyze() {
           </div>
         </div>
       ) : (
-        <div className="mt-10 grid md:grid-cols-2 gap-10">
+        <div className="mt-6 grid lg:grid-cols-2 gap-10 lg:gap-12">
           <div>
             <UploadDropzone
               label="Drop audio file here"
@@ -247,17 +247,19 @@ export default function Analyze() {
               onSelect={setAudioFile}
             />
             {audioFile && (
-              <button
-                className="mt-3 text-xs opacity-60 hover:opacity-100 underline"
-                onClick={() => {
-                  setAudioFile(null);
-                  setAudioResult(null);
-                }}
-              >
-                Remove file
-              </button>
+              <div className="mt-3">
+                <button
+                  className="font-mono text-xs uppercase tracking-wide text-ink-faint hover:text-signal underline underline-offset-4"
+                  onClick={() => {
+                    setAudioFile(null);
+                    setAudioResult(null);
+                  }}
+                >
+                  Remove file
+                </button>
+              </div>
             )}
-            <Button className="mt-8 w-full sm:w-auto" disabled={!audioFile || loading} onClick={runAudio}>
+            <Button className="mt-4 w-full sm:w-auto" disabled={!audioFile || loading} onClick={runAudio}>
               {loading ? "Analyzing…" : "Run Audio Analysis →"}
             </Button>
             {error && (
@@ -293,10 +295,14 @@ export default function Analyze() {
 function EmptyState({ text }: { text: string }) {
   return (
     <div
-      className="h-full min-h-[280px] border border-dashed flex items-center justify-center text-sm opacity-50 text-center px-8"
-      style={{ borderColor: "var(--page-border)" }}
+      className="h-full min-h-[360px] border bg-canvas-raised/30 flex flex-col items-center justify-center gap-4 text-center px-8"
+      style={{ borderColor: "var(--page-border)", borderStyle: "dashed" }}
     >
-      {text}
+      <svg width="32" height="32" viewBox="0 0 32 32" className="opacity-30">
+        <circle cx="16" cy="16" r="11" fill="none" stroke="currentColor" strokeWidth="1.25" />
+        <path d="M16 11v6 M16 20.5v.01" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+      </svg>
+      <p className="font-mono text-sm text-ink-faint max-w-xs">{text}</p>
     </div>
   );
 }
@@ -311,14 +317,14 @@ function ErrorState({
   onChooseAnother: () => void;
 }) {
   return (
-    <div className="mt-4 border-l-2 pl-4 py-1" style={{ borderColor: "var(--copper)" }} role="alert">
-      <p className="text-sm text-copper-dark">Unable to analyze this file.</p>
-      <p className="mt-1 text-xs opacity-60">{message}</p>
-      <div className="mt-3 flex gap-4 text-xs">
-        <button onClick={onRetry} className="underline opacity-80 hover:opacity-100">
+    <div className="mt-5 border px-5 py-4 bg-anomaly/5" style={{ borderColor: "var(--page-anomaly)" }} role="alert">
+      <p className="font-mono text-xs uppercase tracking-[0.15em] text-anomaly">Unable to analyze this file</p>
+      <p className="mt-2 text-sm text-ink-soft">{message}</p>
+      <div className="mt-4 flex gap-5 text-xs">
+        <button onClick={onRetry} className="font-mono uppercase tracking-wide underline underline-offset-4 text-ink-soft hover:text-signal">
           Try again
         </button>
-        <button onClick={onChooseAnother} className="underline opacity-80 hover:opacity-100">
+        <button onClick={onChooseAnother} className="font-mono uppercase tracking-wide underline underline-offset-4 text-ink-soft hover:text-signal">
           Choose another file
         </button>
       </div>
@@ -342,32 +348,31 @@ function AvResultPanel({
   const duration = meta?.num_frames && meta?.fps ? meta.num_frames / meta.fps : null;
 
   return (
-    <div className="fade-in">
-      <p className="text-xs uppercase tracking-widest opacity-60">Audio-Visual Synchronization</p>
-      <div className="mt-3 flex items-baseline gap-4">
-        <h2 className={`font-display text-3xl ${isSync ? "text-sage-dark" : "text-copper-dark"}`}>
-          {isSync ? "Synchronized" : "Desynchronized"}
-        </h2>
-        <span className="font-display text-2xl opacity-70">
-          {(result.aggregate_sync_score * 100).toFixed(2)}%
-        </span>
-      </div>
-      <p className="text-xs opacity-50">Sync Score</p>
+    <div className="fade-in border bg-canvas-raised/40 p-6 sm:p-8" style={{ borderColor: "var(--page-border-strong)" }}>
+      <p className="font-mono text-xs uppercase tracking-[0.2em] text-ink-faint">Audio-Visual Synchronization</p>
 
-      <div className="mt-6 grid grid-cols-3 gap-3">
+      <div className="mt-5 flex flex-wrap items-center gap-6">
+        <RadialGauge
+          value={result.aggregate_sync_score * 100}
+          label={isSync ? "Synchronized" : "Desynchronized"}
+          tone={isSync ? "signal" : "anomaly"}
+          size={120}
+        />
+      </div>
+
+      <div className="mt-8 grid grid-cols-2 gap-3">
         <ScoreCard label="Sync Score" value={`${(result.sync_probability * 100).toFixed(2)}%`} />
         <ScoreCard label="Desync Score" value={`${(result.desync_probability * 100).toFixed(2)}%`} />
-        <ScoreCard label="Aggregate Score" value={`${(result.aggregate_sync_score * 100).toFixed(2)}%`} />
       </div>
 
       {result.per_window_sync_scores && result.per_window_sync_scores.length > 0 && (
         <div className="mt-8">
-          <p className="text-xs uppercase tracking-widest opacity-60 mb-3">Synchronization Timeline</p>
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-ink-faint mb-3">Synchronization Timeline</p>
           <SyncTimeline scores={result.per_window_sync_scores} metadata={meta} onSeek={onSeek} selectedTime={selectedTime} />
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+      <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
         <Meta label="Duration" value={duration ? `${duration.toFixed(1)}s` : "—"} />
         <Meta label="Windows Analyzed" value={meta?.num_windows?.toString() ?? "—"} />
         <Meta label="Frame Rate" value={meta?.fps ? `${meta.fps.toFixed(1)} fps` : "—"} />
@@ -381,12 +386,12 @@ function AvResultPanel({
         />
       </div>
 
-      <p className="mt-8 text-xs leading-relaxed opacity-60 border-l-2 pl-4" style={{ borderColor: "var(--sage)" }}>
+      <p className="mt-8 text-sm leading-relaxed text-ink-soft border-l-2 pl-4" style={{ borderColor: "var(--page-signal)" }}>
         AV mode detects temporal synchronization inconsistencies between audio and visual streams. It does not
         directly detect content manipulation. A synchronized manipulated video can still be a deepfake.
       </p>
 
-      <button onClick={onOpenReport} className="mt-6 text-xs underline opacity-70 hover:opacity-100">
+      <button onClick={onOpenReport} className="mt-6 font-mono text-xs uppercase tracking-wide underline underline-offset-4 text-ink-soft hover:text-signal">
         Open full report →
       </button>
     </div>
@@ -395,28 +400,36 @@ function AvResultPanel({
 
 function AudioResultPanel({ result, onOpenReport }: { result: AudioOnlyResult; onOpenReport: () => void }) {
   const isBonafide = result.predicted_label === "bonafide";
-  return (
-    <div className="fade-in">
-      <p className="text-xs uppercase tracking-widest opacity-60">Audio Authenticity</p>
-      <h2 className={`mt-3 font-display text-3xl ${isBonafide ? "text-sage-dark" : "text-copper-dark"}`}>
-        {isBonafide ? "Bonafide / Real" : "Spoof / Synthetic"}
-      </h2>
+  const primaryScore = isBonafide ? result.bonafide_probability : result.spoof_probability;
 
-      <div className="mt-6 grid grid-cols-2 gap-3">
+  return (
+    <div className="fade-in border bg-canvas-raised/40 p-6 sm:p-8" style={{ borderColor: "var(--page-border-strong)" }}>
+      <p className="font-mono text-xs uppercase tracking-[0.2em] text-ink-faint">Audio Authenticity</p>
+
+      <div className="mt-5">
+        <RadialGauge
+          value={primaryScore * 100}
+          label={isBonafide ? "Bonafide / Real" : "Spoof / Synthetic"}
+          tone={isBonafide ? "signal" : "anomaly"}
+          size={120}
+        />
+      </div>
+
+      <div className="mt-8 grid grid-cols-2 gap-3">
         <ScoreCard label="Bonafide Score" value={result.bonafide_probability.toFixed(4)} />
         <ScoreCard label="Spoof Score" value={result.spoof_probability.toFixed(4)} />
       </div>
 
-      <div className="mt-6 text-sm">
+      <div className="mt-8 text-sm">
         <Meta label="Model" value={result.use_ensemble ? "CNN + Transformer Ensemble" : "Transformer"} />
       </div>
 
-      <p className="mt-8 text-xs leading-relaxed opacity-60 border-l-2 pl-4" style={{ borderColor: "var(--sage)" }}>
+      <p className="mt-8 text-sm leading-relaxed text-ink-soft border-l-2 pl-4" style={{ borderColor: "var(--page-signal)" }}>
         Scores are raw model outputs, not calibrated probabilities. Audio-only mode evaluates whether the
         speech signal is likely bonafide or spoofed, based on acoustic features learned from ASVspoof 2019 LA.
       </p>
 
-      <button onClick={onOpenReport} className="mt-6 text-xs underline opacity-70 hover:opacity-100">
+      <button onClick={onOpenReport} className="mt-6 font-mono text-xs uppercase tracking-wide underline underline-offset-4 text-ink-soft hover:text-signal">
         Open full report →
       </button>
     </div>
@@ -426,8 +439,8 @@ function AudioResultPanel({ result, onOpenReport }: { result: AudioOnlyResult; o
 function Meta({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs uppercase tracking-widest opacity-50">{label}</p>
-      <p className="mt-1 font-display text-lg">{value}</p>
+      <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-ink-faint">{label}</p>
+      <p className="mt-1 font-display text-xl">{value}</p>
     </div>
   );
 }

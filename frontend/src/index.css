@@ -3,20 +3,18 @@
 @tailwind utilities;
 
 :root {
-  --page-bg: #f6f1e7;
-  --page-fg: #14170f;
-  --page-muted: #5c5849;
-  --page-border: rgba(20, 23, 15, 0.12);
-  --page-surface: #ffffff;
-  color-scheme: light;
-}
-
-[data-theme="dark"] {
-  --page-bg: #12140f;
-  --page-fg: #f6f1e7;
-  --page-muted: #b9b3a0;
-  --page-border: rgba(246, 241, 231, 0.14);
-  --page-surface: #1a1e15;
+  --page-bg: #0a0b0e;
+  --page-bg-raised: #12141a;
+  --page-bg-elevated: #181b22;
+  --page-fg: #edeff3;
+  --page-muted: #8d96a8;
+  --page-faint: #5b6270;
+  --page-border: rgba(237, 239, 243, 0.1);
+  --page-border-strong: rgba(237, 239, 243, 0.18);
+  --page-surface: #12141a;
+  --page-signal: #22d3ee;
+  --page-anomaly: #f59e0b;
+  --page-fusion: #8b7cf6;
   color-scheme: dark;
 }
 
@@ -37,17 +35,21 @@ body {
   color: var(--page-fg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  transition: background-color 0.4s ease, color 0.4s ease;
 }
 
 h1,
 h2,
 h3,
 h4 {
-  font-family: "Fraunces", serif;
+  font-family: "Space Grotesk", system-ui, sans-serif;
   font-weight: 500;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
   margin: 0;
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
 }
 
 a {
@@ -55,15 +57,33 @@ a {
 }
 
 ::selection {
-  background: #7c9478;
-  color: #12140f;
+  background: var(--page-signal);
+  color: #061012;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--page-bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--page-border-strong);
+  border-radius: 999px;
+  border: 2px solid var(--page-bg);
+}
+
+:focus-visible {
+  outline: 2px solid var(--page-signal);
+  outline-offset: 2px;
 }
 
 .container-page {
   max-width: 1240px;
   margin: 0 auto;
-  padding-left: 24px;
-  padding-right: 24px;
+  padding-left: 20px;
+  padding-right: 20px;
 }
 
 @media (min-width: 768px) {
@@ -73,8 +93,44 @@ a {
   }
 }
 
+/* Very subtle technical grid, used sparingly as a section backdrop. */
+.bg-grid {
+  background-image:
+    linear-gradient(to right, rgba(237, 239, 243, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(237, 239, 243, 0.05) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* Faint film grain so large dark fields read as "a lit room", not a flat void.
+   Deliberately does NOT set `position` here: it's a single-class selector,
+   same specificity as Tailwind's `.sticky`/`.absolute`/`.fixed`, so forcing
+   `position: relative` here would silently win the cascade (this rule is
+   declared after @tailwind utilities) and downgrade any element that pairs
+   `bg-grain` with one of those position utilities. Callers that need a
+   positioning context for the grain overlay pair this class with `relative`
+   (or already have one via `sticky`/`absolute`/`fixed`). */
+.bg-grain {
+  isolation: isolate;
+}
+.bg-grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* No fill-mode: with `both`/`forwards`, Chromium keeps treating the element
+   as having an active transform animation even once it settles on an
+   identity value, which establishes a containing block and silently breaks
+   position:sticky/fixed for every descendant — including any pinned scroll
+   stage nested under <main>. Without a fill-mode the animation's effect
+   fully detaches once it completes, and since the end keyframe already
+   matches the element's natural (unanimated) styles, nothing visibly snaps. */
 .fade-in {
-  animation: fadeIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: fadeIn 0.6s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 @keyframes fadeIn {
@@ -84,12 +140,72 @@ a {
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
+}
+
+@keyframes pulse-signal {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@keyframes scanline {
+  0% { transform: translateY(0); opacity: 0; }
+  5% { opacity: 1; }
+  95% { opacity: 1; }
+  100% { transform: translateY(100vh); opacity: 0; }
+}
+
+@keyframes jitter {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(1.5px); }
+}
+
+@keyframes trace-drift {
+  from { transform: translateX(0); }
+  to { transform: translateX(-900px); }
+}
+
+@keyframes dot-pulse {
+  0%, 100% { opacity: 0.12; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+@keyframes bar-pulse {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.55); }
+}
+
+@keyframes dash-flow {
+  to { stroke-dashoffset: -200; }
+}
+
+@keyframes ring-pulse {
+  0% { transform: scale(0.92); opacity: 0.5; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+@keyframes playhead-slide {
+  0% { left: 2%; }
+  50% { left: 94%; }
+  100% { left: 2%; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .fade-in {
     animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -6,12 +6,9 @@ interface ScoreCardProps {
 
 export default function ScoreCard({ label, value, emphasis = false }: ScoreCardProps) {
   return (
-    <div
-      className="border px-5 py-4"
-      style={{ borderColor: "var(--page-border)" }}
-    >
-      <p className="text-xs uppercase tracking-widest opacity-60">{label}</p>
-      <p className={`mt-2 font-display ${emphasis ? "text-4xl" : "text-2xl"}`}>{value}</p>
+    <div className="border bg-canvas-raised/40 px-5 py-5" style={{ borderColor: "var(--page-border-strong)" }}>
+      <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-ink-faint">{label}</p>
+      <p className={`mt-2 font-display ${emphasis ? "text-5xl" : "text-3xl"}`}>{value}</p>
     </div>
   );
 }

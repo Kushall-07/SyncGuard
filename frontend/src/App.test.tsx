@@ -53,12 +53,12 @@ function renderAt(path: string) {
 describe("routing", () => {
   it("renders the home page hero", async () => {
     renderAt("/");
-    expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent(/what you hear/i);
+    expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent(/what you hear.*what you see/i);
   });
 
   it("renders the analyze page", async () => {
     renderAt("/analyze");
-    expect(await screen.findByRole("heading", { name: /upload and analyze/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /analyze media/i })).toBeInTheDocument();
   });
 
   it("renders the technology page", async () => {

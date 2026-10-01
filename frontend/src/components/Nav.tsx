@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { checkHealth } from "../services/api";
+import { useScrolledPast } from "../lib/scroll";
 
 const LINKS = [
   { to: "/", label: "Home" },
@@ -15,6 +16,7 @@ export default function Nav() {
   const [gpuReady, setGpuReady] = useState<boolean | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
+  const scrolled = useScrolledPast(32);
 
   useEffect(() => {
     let cancelled = false;
@@ -36,10 +38,11 @@ export default function Nav() {
 
   return (
     <header
-      className="sticky top-0 z-50 border-b backdrop-blur-md"
+      className="sticky top-0 z-50 border-b transition-[background-color,backdrop-filter,border-color] duration-300"
       style={{
-        borderColor: "var(--page-border)",
-        backgroundColor: "color-mix(in srgb, var(--page-bg) 82%, transparent)",
+        borderColor: scrolled ? "var(--page-border)" : "transparent",
+        backgroundColor: scrolled ? "color-mix(in srgb, var(--page-bg) 78%, transparent)" : "transparent",
+        backdropFilter: scrolled ? "blur(10px)" : "none",
       }}
     >
       <div className="container-page flex h-16 items-center justify-between">
