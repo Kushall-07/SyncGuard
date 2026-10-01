@@ -23,13 +23,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import torch
 import yaml
 from torch import Tensor, nn
 
-from src.models.audio.encoder import AudioEncoder, load_audio_encoder
+from src.models.audio.encoder import (
+    AudioEncoder,
+    audio_token_seconds_from_encoder,
+    load_audio_encoder,
+)
 from src.models.fusion.temporal_align import AudioToVideoAligner
 from src.models.video.visual_encoder import VisualEncoder, load_visual_encoder
 
@@ -78,14 +81,6 @@ class AVEncoderOutput:
     video_fps: Tensor         # [B] float32
 
 
-def _audio_token_seconds_from_payload(encoder: AudioEncoder, payload: dict[str, Any]) -> float:
-    audio_cfg = payload["audio_cfg"]
-    hop_length = int(audio_cfg["mel"]["hop_length"])
-    sample_rate = int(audio_cfg["sample_rate"])
-    time_downsample = int(encoder.time_downsample)
-    return hop_length * time_downsample / sample_rate
-
-
 class AVEncoder(nn.Module):
     def __init__(
         self,
@@ -111,8 +106,8 @@ class AVEncoder(nn.Module):
                 f"(not the score-level ensemble), got variant {self.audio_variant!r}"
             )
 
-        self.audio_token_seconds = _audio_token_seconds_from_payload(
-            self.audio_encoder, self._audio_payload
+        self.audio_token_seconds = audio_token_seconds_from_encoder(
+            self.audio_encoder, self._audio_payload["audio_cfg"]
         )
         self.n_mels = int(self._audio_payload["n_mels"])
         self.audio_dim = int(self.audio_encoder.output_dim)

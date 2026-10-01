@@ -23,7 +23,12 @@ from src.config import AudioConfig, ModelConfig
 from src.models.audio.cnn import AudioCNNEncoder, AudioEncoderOutput
 from src.models.audio.transformer import AudioTransformerEncoder
 
-__all__ = ["AudioEncoder", "export_audio_encoder", "load_audio_encoder"]
+__all__ = [
+    "AudioEncoder",
+    "export_audio_encoder",
+    "load_audio_encoder",
+    "audio_token_seconds_from_encoder",
+]
 
 _EXPORT_FORMAT = 1
 
@@ -50,6 +55,25 @@ class AudioEncoder(nn.Module):
             tokens = self.transformer(out.tokens, key_padding_mask=key_padding_mask)
             out = AudioEncoderOutput(tokens=tokens, time_downsample=out.time_downsample)
         return out
+
+
+def audio_token_seconds_from_encoder(encoder: "AudioEncoder", audio_cfg: dict[str, Any]) -> float:
+    """Wall-clock duration of one audio token, derived from the encoder's actual
+    architecture rather than a stored scalar.
+
+    ``export_audio_encoder`` does not persist a ``time_downsample`` key in its
+    payload, so ``payload.get("time_downsample", 1)`` always silently returns the
+    default ``1`` regardless of the encoder's real CNN depth - it never reflects
+    the encoder that was actually loaded. The only correct source is the live
+    module's own ``time_downsample`` attribute (``AudioCNNEncoder`` sets it to
+    ``2 ** len(channels)``), combined with the mel hop length and sample rate the
+    export payload does carry.
+    """
+
+    hop_length = int(audio_cfg["mel"]["hop_length"])
+    sample_rate = int(audio_cfg["sample_rate"])
+    time_downsample = int(encoder.time_downsample)
+    return hop_length * time_downsample / sample_rate
 
 
 def export_audio_encoder(
