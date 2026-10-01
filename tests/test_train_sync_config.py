@@ -133,26 +133,29 @@ def test_video_data_config_construction() -> None:
 
 
 def test_audio_token_seconds_calculation() -> None:
-    """Test that audio token seconds is calculated correctly from Phase 5 payload."""
-    # Phase 5 audio encoder payload structure
-    audio_payload = {
-        "audio_cfg": {
-            "mel": {
-                "hop_length": 160,
-            },
-            "sample_rate": 16000,
-        },
-        "time_downsample": 1,  # Not present in actual payload, default to 1
+    """`export_audio_encoder` never stores a `time_downsample` key in its payload
+    (see its implementation in `src/models/audio/encoder.py`), so
+    `audio_payload.get("time_downsample", 1)` always silently falls back to `1`
+    regardless of the encoder's real CNN depth - this used to be asserted here as
+    the "correct" value, which is exactly the production bug this test now
+    guards against. The only correct source is the loaded encoder's own
+    `time_downsample` attribute via `audio_token_seconds_from_encoder`.
+    """
+    from src.config import ModelConfig
+    from src.models.audio.encoder import AudioEncoder, audio_token_seconds_from_encoder
+
+    audio_cfg = {
+        "mel": {"hop_length": 160},
+        "sample_rate": 16000,
     }
+    model_cfg = ModelConfig(audio_cnn_channels=(32, 64, 128), audio_encoder="cnn")
+    encoder = AudioEncoder(model_cfg, n_mels=80)
 
-    # Calculate audio token seconds: hop_length * time_downsample / sample_rate
-    hop_length = audio_payload["audio_cfg"]["mel"]["hop_length"]
-    time_downsample = audio_payload.get("time_downsample", 1)
-    sample_rate = audio_payload["audio_cfg"]["sample_rate"]
-    audio_token_seconds = (hop_length * time_downsample) / sample_rate
-
-    # Expected: 160 * 1 / 16000 = 0.01
-    assert audio_token_seconds == 0.01
+    # 2 ** len([32, 64, 128]) == 8 downsampling blocks -> 160 * 8 / 16000 = 0.08s/token,
+    # NOT the previously-asserted 0.01 (which corresponds to a nonexistent time_downsample=1).
+    assert encoder.time_downsample == 8
+    audio_token_seconds = audio_token_seconds_from_encoder(encoder, audio_cfg)
+    assert audio_token_seconds == pytest.approx(0.08)
 
 
 def test_monitor_metric_exists_in_phase11_metrics() -> None:
@@ -224,7 +227,7 @@ def test_first_batch_loading() -> None:
     from src.config import AudioConfig, TrainingConfig, VideoDataConfig
     from src.data.lavdf_dataset import build_lavdf_datasets
     from src.data.sync_pairs import SyncPairConfig
-    from src.models.audio.encoder import load_audio_encoder
+    from src.models.audio.encoder import audio_token_seconds_from_encoder, load_audio_encoder
     from src.models.video.visual_encoder import load_visual_encoder
 
     # Load config
@@ -242,11 +245,9 @@ def test_first_batch_loading() -> None:
         map_location="cpu"
     )
 
-    # Get audio token seconds
-    hop_length = audio_payload["audio_cfg"]["mel"]["hop_length"]
-    time_downsample = audio_payload.get("time_downsample", 1)
-    sample_rate = audio_payload["audio_cfg"]["sample_rate"]
-    audio_token_seconds = (hop_length * time_downsample) / sample_rate
+    # Get audio token seconds (derived from the encoder's real architecture, not
+    # a nonexistent stored scalar - see audio_token_seconds_from_encoder)
+    audio_token_seconds = audio_token_seconds_from_encoder(audio_encoder, audio_payload["audio_cfg"])
 
     # Load configs
     video_dict = av_align_cfg.get("av_align", {}).get("video", {})
