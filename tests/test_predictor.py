@@ -108,11 +108,17 @@ def temp_checkpoints(
     cross_attention = BidirectionalCrossAttention.from_config(ca_cfg)
     sync_head = SyncHead.from_config(SyncHeadConfig(hidden_dim=128, dropout=0.1), input_dim=256)
 
-    # Save sync model checkpoint
+    # Save sync model checkpoint. Keys must be flattened with the
+    # "cross_attention."/"sync_head." prefix (matching src.training.checkpoint's
+    # save_checkpoint, i.e. model.state_dict() with no extra nesting) - NOT
+    # nested under a single "cross_attention.state_dict" key, which silently
+    # fails to load any real parameter under strict=False (see
+    # CheckpointCompatibilityError in src/inference/checkpoint_validation.py,
+    # which now catches exactly this shape of mistake).
     sync_checkpoint = {
         "model": {
-            "cross_attention.state_dict": cross_attention.state_dict(),
-            "sync_head.state_dict": sync_head.state_dict(),
+            **{f"cross_attention.{k}": v for k, v in cross_attention.state_dict().items()},
+            **{f"sync_head.{k}": v for k, v in sync_head.state_dict().items()},
         }
     }
     sync_model_path = tmp_dir / "sync_model.pt"
@@ -126,7 +132,11 @@ def temp_checkpoints(
         dropout=0.1,
         pooling="attentive",
     )
-    spoof_checkpoint = {"spoof_head": spoof_head.state_dict()}
+    # No sibling config.yaml two dirs up from spoof_head_path, so the predictor
+    # takes the fallback branch (separate audio_encoder_path + head-only load).
+    # That branch scrapes "head.*"-prefixed keys from a "model" dict - match
+    # that shape exactly, not an arbitrary top-level key name.
+    spoof_checkpoint = {"model": {f"head.{k}": v for k, v in spoof_head.state_dict().items()}}
     spoof_head_path = tmp_dir / "spoof_head.pt"
     torch.save(spoof_checkpoint, spoof_head_path)
 
@@ -907,3 +917,278 @@ def test_predict_sync_lab_fails_for_missing_landmarks(
             landmarks_path="nonexistent.npz",
             shift_seconds=0.0,
         )
+
+
+# --------------------------------------------------------------------------- windowed AV inference (Phase 22)
+
+
+@pytest.fixture()
+def dummy_video_file(tmp_path: Path) -> Path:
+    """`predict_audio_visual` only reads `video_path` from disk when no separate
+    audio/landmarks are supplied; when both are given (as in the tests below), the
+    "video" just needs to exist as a file for the FileNotFoundError check."""
+    path = tmp_path / "dummy.mp4"
+    path.write_bytes(b"not a real mp4, unused when audio_path+landmarks_path are given")
+    return path
+
+
+def _make_landmarks_file(path: Path, n_frames: int, fps: float = 25.0) -> Path:
+    landmarks = np.random.randn(n_frames, N_FACEMESH_POINTS, 3).astype(np.float32)
+    valid = np.ones(n_frames, dtype=bool)
+    np.savez(path, points=landmarks, valid=valid, fps=fps, frame_idx=np.arange(n_frames))
+    return path
+
+
+@pytest.fixture(params=[10, 32, 45, 64, 90])
+def windowed_landmarks_path(request, tmp_path: Path) -> tuple[Path, int]:
+    """Landmark files spanning: shorter than one window (10), exactly one window
+    (32), one full + one partial window (45), exactly two windows (64), and two
+    full + one partial window (90)."""
+    n_frames = request.param
+    path = _make_landmarks_file(tmp_path / f"landmarks_{n_frames}.npz", n_frames)
+    return path, n_frames
+
+
+def test_windowed_av_inference_covers_expected_window_counts(
+    temp_checkpoints: tuple[Path, Path, Path, Path],
+    sync_config_path: Path,
+    test_audio_file: Path,
+    dummy_video_file: Path,
+    windowed_landmarks_path: tuple[Path, Path],
+) -> None:
+    audio_enc_path, visual_enc_path, sync_model_path, _ = temp_checkpoints
+    landmarks_path, n_frames = windowed_landmarks_path
+
+    predictor = SyncGuardPredictor(
+        audio_encoder_path=audio_enc_path,
+        visual_encoder_path=visual_enc_path,
+        sync_model_path=sync_model_path,
+        sync_config_path=sync_config_path,
+        device="cpu",
+        av_inference_mode="windowed",
+        window_frames=32,
+        stride_frames=32,
+    )
+
+    result = predictor.predict_audio_visual(
+        dummy_video_file, audio_path=test_audio_file, landmarks_path=landmarks_path, mode="windowed",
+    )
+
+    expected_windows = -(-n_frames // 32)  # ceil division
+    meta = result.timing_metadata
+    assert meta["av_inference_mode"] == "windowed"
+    assert meta["window_frames"] == 32
+    assert meta["stride_frames"] == 32
+    assert meta["num_windows"] == expected_windows
+    assert len(result.per_window_sync_scores) == expected_windows
+    assert len(meta["windows"]) == expected_windows
+    assert 0.0 <= result.aggregate_sync_score <= 1.0
+    assert all(0.0 <= s <= 1.0 for s in result.per_window_sync_scores)
+    # No NaN/Inf anywhere in the per-window scores.
+    assert all(s == s and abs(s) != float("inf") for s in result.per_window_sync_scores)
+
+
+def test_windowed_final_window_has_correct_valid_fraction(
+    temp_checkpoints: tuple[Path, Path, Path, Path],
+    sync_config_path: Path,
+    test_audio_file: Path,
+    dummy_video_file: Path,
+    tmp_path: Path,
+) -> None:
+    """45 frames -> windows [0,32) full, [32,45) partial with 13/32 valid frames."""
+    audio_enc_path, visual_enc_path, sync_model_path, _ = temp_checkpoints
+    landmarks_path = _make_landmarks_file(tmp_path / "landmarks_45.npz", 45)
+
+    predictor = SyncGuardPredictor(
+        audio_encoder_path=audio_enc_path,
+        visual_encoder_path=visual_enc_path,
+        sync_model_path=sync_model_path,
+        sync_config_path=sync_config_path,
+        device="cpu",
+        av_inference_mode="windowed",
+    )
+
+    result = predictor.predict_audio_visual(
+        dummy_video_file, audio_path=test_audio_file, landmarks_path=landmarks_path, mode="windowed",
+    )
+    windows = result.timing_metadata["windows"]
+    assert len(windows) == 2
+    assert windows[0]["valid_fraction"] == 1.0
+    assert windows[1]["n_valid_frames"] == 13
+    assert windows[1]["valid_fraction"] == pytest.approx(13 / 32)
+    assert windows[1]["end_time"] == pytest.approx(45 / 25.0)
+
+
+def test_windowed_and_legacy_modes_both_available_on_same_predictor(
+    temp_checkpoints: tuple[Path, Path, Path, Path],
+    sync_config_path: Path,
+    test_audio_file: Path,
+    dummy_video_file: Path,
+    tmp_path: Path,
+) -> None:
+    """The predictor default mode does not prevent calling the other mode explicitly
+    (legacy_full_clip stays available as a fallback/reference alongside windowed)."""
+    audio_enc_path, visual_enc_path, sync_model_path, _ = temp_checkpoints
+    landmarks_path = _make_landmarks_file(tmp_path / "landmarks_50.npz", 50)
+
+    predictor = SyncGuardPredictor(
+        audio_encoder_path=audio_enc_path,
+        visual_encoder_path=visual_enc_path,
+        sync_model_path=sync_model_path,
+        sync_config_path=sync_config_path,
+        device="cpu",
+        av_inference_mode="legacy_full_clip",
+    )
+
+    legacy = predictor.predict_audio_visual(
+        dummy_video_file, audio_path=test_audio_file, landmarks_path=landmarks_path,
+    )
+    windowed = predictor.predict_audio_visual(
+        dummy_video_file, audio_path=test_audio_file, landmarks_path=landmarks_path, mode="windowed",
+    )
+
+    assert legacy.timing_metadata["av_inference_mode"] == "legacy_full_clip"
+    assert windowed.timing_metadata["av_inference_mode"] == "windowed"
+    # Legacy mode always emits exactly one "window" per raw frame (50 here);
+    # windowed mode tiles them into 32-frame windows (2 here).
+    assert legacy.timing_metadata["num_windows"] == 50
+    assert windowed.timing_metadata["num_windows"] == 2
+
+
+def test_windowed_av_inference_rejects_unknown_mode(
+    temp_checkpoints: tuple[Path, Path, Path, Path],
+    sync_config_path: Path,
+    test_audio_file: Path,
+    dummy_video_file: Path,
+    tmp_path: Path,
+) -> None:
+    audio_enc_path, visual_enc_path, sync_model_path, _ = temp_checkpoints
+    landmarks_path = _make_landmarks_file(tmp_path / "landmarks_32.npz", 32)
+
+    predictor = SyncGuardPredictor(
+        audio_encoder_path=audio_enc_path,
+        visual_encoder_path=visual_enc_path,
+        sync_model_path=sync_model_path,
+        sync_config_path=sync_config_path,
+        device="cpu",
+    )
+
+    with pytest.raises(ValueError, match="mode must be one of"):
+        predictor.predict_audio_visual(
+            dummy_video_file, audio_path=test_audio_file, landmarks_path=landmarks_path, mode="bogus_mode",
+        )
+
+
+def test_predictor_rejects_invalid_av_inference_mode_at_construction(
+    temp_checkpoints: tuple[Path, Path, Path, Path],
+    sync_config_path: Path,
+) -> None:
+    audio_enc_path, visual_enc_path, sync_model_path, _ = temp_checkpoints
+
+    with pytest.raises(ValueError, match="av_inference_mode must be one of"):
+        SyncGuardPredictor(
+            audio_encoder_path=audio_enc_path,
+            visual_encoder_path=visual_enc_path,
+            sync_model_path=sync_model_path,
+            sync_config_path=sync_config_path,
+            device="cpu",
+            av_inference_mode="bogus_mode",
+        )
+
+
+def test_windowed_av_inference_is_deterministic(
+    temp_checkpoints: tuple[Path, Path, Path, Path],
+    sync_config_path: Path,
+    test_audio_file: Path,
+    dummy_video_file: Path,
+    tmp_path: Path,
+) -> None:
+    audio_enc_path, visual_enc_path, sync_model_path, _ = temp_checkpoints
+    landmarks_path = _make_landmarks_file(tmp_path / "landmarks_70.npz", 70)
+
+    predictor = SyncGuardPredictor(
+        audio_encoder_path=audio_enc_path,
+        visual_encoder_path=visual_enc_path,
+        sync_model_path=sync_model_path,
+        sync_config_path=sync_config_path,
+        device="cpu",
+        av_inference_mode="windowed",
+    )
+
+    r1 = predictor.predict_audio_visual(dummy_video_file, audio_path=test_audio_file, landmarks_path=landmarks_path)
+    r2 = predictor.predict_audio_visual(dummy_video_file, audio_path=test_audio_file, landmarks_path=landmarks_path)
+    assert r1.per_window_sync_scores == r2.per_window_sync_scores
+    assert r1.aggregate_sync_score == r2.aggregate_sync_score
+
+
+def test_windowed_av_inference_uses_external_audio_not_embedded(
+    temp_checkpoints: tuple[Path, Path, Path, Path],
+    sync_config_path: Path,
+    tmp_path: Path,
+    dummy_video_file: Path,
+) -> None:
+    """Regression test (Phase 18): an explicitly supplied audio_path must be used
+    verbatim - a different-content audio file must produce a different result than
+    the dummy video's (nonexistent/garbage) embedded audio would, and no exception
+    about reading embedded audio from the dummy mp4 should ever be raised, since
+    audio_path takes priority and the video's own audio stream is never touched."""
+    from src.preprocessing.synthetic import sine, write_wav
+
+    audio_enc_path, visual_enc_path, sync_model_path, _ = temp_checkpoints
+    landmarks_path = _make_landmarks_file(tmp_path / "landmarks_32b.npz", 32)
+
+    samples, sr = sine(880.0, sample_rate=16000, duration_s=1.28)
+    audio_path = write_wav(tmp_path / "external.wav", samples, sr)
+
+    predictor = SyncGuardPredictor(
+        audio_encoder_path=audio_enc_path,
+        visual_encoder_path=visual_enc_path,
+        sync_model_path=sync_model_path,
+        sync_config_path=sync_config_path,
+        device="cpu",
+        av_inference_mode="windowed",
+    )
+
+    # This would raise while trying to decode the dummy mp4's audio stream if the
+    # implementation ever fell back to embedded video audio instead of audio_path.
+    result = predictor.predict_audio_visual(
+        dummy_video_file, audio_path=audio_path, landmarks_path=landmarks_path,
+    )
+    assert result.timing_metadata["num_windows"] == 1
+
+
+def test_windowed_av_inference_score_depends_on_external_audio_content(
+    temp_checkpoints: tuple[Path, Path, Path, Path],
+    sync_config_path: Path,
+    tmp_path: Path,
+    dummy_video_file: Path,
+) -> None:
+    """The AV sync score must actually depend on the supplied audio's content,
+    not just on whether one was supplied - swapping the external WAV for a
+    silent one (same duration, same landmarks) must change the score, proving
+    the model's output is not filename/path-driven or audio-independent."""
+    from src.preprocessing.synthetic import sine, write_wav
+
+    audio_enc_path, visual_enc_path, sync_model_path, _ = temp_checkpoints
+    landmarks_path = _make_landmarks_file(tmp_path / "landmarks_32c.npz", 32)
+
+    samples, sr = sine(880.0, sample_rate=16000, duration_s=1.28)
+    tone_path = write_wav(tmp_path / "tone.wav", samples, sr)
+    silence_path = write_wav(tmp_path / "silence.wav", samples * 0.0, sr)
+
+    predictor = SyncGuardPredictor(
+        audio_encoder_path=audio_enc_path,
+        visual_encoder_path=visual_enc_path,
+        sync_model_path=sync_model_path,
+        sync_config_path=sync_config_path,
+        device="cpu",
+        av_inference_mode="windowed",
+    )
+
+    tone_result = predictor.predict_audio_visual(
+        dummy_video_file, audio_path=tone_path, landmarks_path=landmarks_path,
+    )
+    silence_result = predictor.predict_audio_visual(
+        dummy_video_file, audio_path=silence_path, landmarks_path=landmarks_path,
+    )
+    assert tone_result.per_window_sync_scores != silence_result.per_window_sync_scores

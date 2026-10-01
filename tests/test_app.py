@@ -1,460 +1,221 @@
-"""Phase 13B: Demo UI tests.
+"""Tests for the SyncGuard launcher (app/app.py).
 
-Tests for:
-1. app imports successfully
-2. UI construction succeeds
-3. predictor is initialized only once
-4. audio-only callback handles a valid result
-5. AV callback handles a valid result
-6. callbacks handle missing input cleanly
-7. probability values are displayed correctly
-8. timeline data is generated correctly from predictor output
-9. predictor exceptions become user-friendly UI errors
-10. existing 469 tests remain passing
+`app/app.py` is no longer the Gradio demo UI - it is a thin one-command
+launcher that starts the existing FastAPI backend (backend/main.py) and the
+existing React/Vite frontend (frontend/) as child processes, waits for both to
+become reachable, and shuts them down on Ctrl+C. It contains no ML/inference
+logic and no API routes of its own.
+
+This replaces the old Gradio-era test_app.py, whose 11 of 12 tests
+unconditionally skipped (they referenced `app.app.get_predictor`,
+`app.app.create_ui`, `app.app.process_audio_only`, etc. - none of which exist
+in the current launcher), which made the suite misleadingly report a large
+skip count instead of real coverage. FastAPI route coverage (backend health,
+audio/AV endpoints) lives in `tests/test_backend_main.py` (mocked predictor)
+and `tests/test_backend_av_e2e.py` (real end-to-end); this file covers only
+what's actually in `app/app.py`: process orchestration and readiness checks.
 """
 
 from __future__ import annotations
 
-import tempfile
+import socket
+import sys
+import time
 from pathlib import Path
 from unittest.mock import Mock, patch
+from urllib.error import URLError
 
 import pytest
 
-# Test imports
-def test_app_imports_successfully() -> None:
-    """Test that app module imports successfully."""
-    try:
-        import sys
-        from pathlib import Path as _Path
-        
-        _repo_root = _Path(__file__).resolve().parents[1]
-        if str(_repo_root) not in sys.path:
-            sys.path.insert(0, str(_repo_root))
-        
-        import app.app
-        assert app.app is not None
-    except ImportError as e:
-        pytest.skip(f"App import failed (expected if dependencies missing): {e}")
+_repo_root = Path(__file__).resolve().parents[1]
+if str(_repo_root) not in sys.path:
+    sys.path.insert(0, str(_repo_root))
+
+import app.app as launcher_module
 
 
-def test_ui_creation_succeeds() -> None:
-    """Test that UI construction succeeds."""
-    try:
-        import sys
-        from pathlib import Path as _Path
-        
-        _repo_root = _Path(__file__).resolve().parents[1]
-        if str(_repo_root) not in sys.path:
-            sys.path.insert(0, str(_repo_root))
-        
-        import app.app
-        
-        # Mock the predictor initialization to avoid loading actual checkpoints
-        with patch('app.app.get_predictor') as mock_get_predictor:
-            mock_predictor = Mock()
-            mock_predictor.device = Mock(type='cpu')
-            mock_predictor.audio_token_seconds = 0.01
-            mock_get_predictor.return_value = mock_predictor
-            
-            demo = app.app.create_ui()
-            assert demo is not None
-    except Exception as e:
-        pytest.skip(f"UI creation failed (expected if dependencies missing): {e}")
+def test_launcher_imports_successfully() -> None:
+    assert launcher_module is not None
+    assert hasattr(launcher_module, "SyncGuardLauncher")
 
 
-def test_predictor_initialization_singleton() -> None:
-    """Test that predictor is initialized only once."""
-    try:
-        import sys
-        from pathlib import Path as _Path
-        
-        _repo_root = _Path(__file__).resolve().parents[1]
-        if str(_repo_root) not in sys.path:
-            sys.path.insert(0, str(_repo_root))
-        
-        import app.app
-        
-        # Reset global predictor
-        app.app._predictor = None
-        
-        with patch('app.app.SyncGuardPredictor') as mock_predictor_class:
-            mock_predictor = Mock()
-            mock_predictor.device = Mock(type='cpu')
-            mock_predictor.audio_token_seconds = 0.01
-            mock_predictor_class.return_value = mock_predictor
-            
-            # First call
-            pred1 = app.app.get_predictor()
-            # Second call
-            pred2 = app.app.get_predictor()
-            
-            # Should return same instance
-            assert pred1 is pred2
-            # Should only initialize once
-            mock_predictor_class.assert_called_once()
-    except Exception as e:
-        pytest.skip(f"Predictor singleton test failed (expected if dependencies missing): {e}")
-
-
-def test_audio_only_callback_handles_valid_result() -> None:
-    """Test that audio-only callback handles a valid result."""
-    try:
-        import sys
-        from pathlib import Path as _Path
-        
-        _repo_root = _Path(__file__).resolve().parents[1]
-        if str(_repo_root) not in sys.path:
-            sys.path.insert(0, str(_repo_root))
-        
-        import app.app
-        from src.inference.predictor import AudioOnlyResult
-        
-        # Mock predictor result
-        mock_result = AudioOnlyResult(
-            mode="audio_only",
-            predicted_label="bonafide",
-            spoof_probability=0.3,
-            bonafide_probability=0.7,
-            confidence=0.7,
+def test_launcher_has_no_ml_or_route_logic() -> None:
+    """The launcher must stay a pure process-orchestration script - it should
+    never define its own inference/scoring functions or FastAPI routes, which
+    belong exclusively to backend/main.py."""
+    forbidden = ("get_predictor", "create_ui", "process_audio_only", "process_audio_visual")
+    for name in forbidden:
+        assert not hasattr(launcher_module, name), (
+            f"app.app should not define {name!r} - inference logic belongs in backend/main.py"
         )
-        
-        with patch('app.app.get_predictor') as mock_get_predictor:
-            mock_predictor = Mock()
-            mock_predictor.predict_audio.return_value = mock_result
-            mock_get_predictor.return_value = mock_predictor
-            
-            # Create temp audio file
-            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
-                temp_path = f.name
-            
-            result_html, error_msg = app.app.process_audio_only(temp_path)
-            
-            assert result_html is not None
-            assert error_msg is None
-            assert "BONAFIDE" in result_html
-            assert "70.00%" in result_html  # bonafide probability
-            assert "30.00%" in result_html  # spoof probability
-            
-            # Cleanup
-            Path(temp_path).unlink(missing_ok=True)
-    except Exception as e:
-        pytest.skip(f"Audio-only callback test failed (expected if dependencies missing): {e}")
 
 
-def test_av_callback_handles_valid_result() -> None:
-    """Test that AV callback handles a valid result."""
+def test_launcher_urls_are_internally_consistent() -> None:
+    assert launcher_module.BACKEND_URL == f"http://{launcher_module.BACKEND_HOST}:{launcher_module.BACKEND_PORT}"
+    assert launcher_module.FRONTEND_URL == f"http://{launcher_module.FRONTEND_HOST}:{launcher_module.FRONTEND_PORT}"
+    assert launcher_module.BACKEND_HEALTH_URL == f"{launcher_module.BACKEND_URL}/api/health"
+    assert launcher_module.BACKEND_PORT != launcher_module.FRONTEND_PORT
+
+
+def test_venv_python_prefers_project_venv_when_present() -> None:
+    """This repo's own .venv exists, so `_venv_python()` must resolve to it,
+    not fall back to whatever interpreter happens to be running pytest."""
+    venv_python = launcher_module.PROJECT_ROOT / ".venv" / "Scripts" / "python.exe"
+    if not venv_python.is_file():
+        pytest.skip(".venv not present in this environment")
+    assert launcher_module._venv_python() == str(venv_python)
+
+
+def test_venv_python_falls_back_to_current_interpreter_when_missing(tmp_path: Path) -> None:
+    with patch.object(launcher_module, "PROJECT_ROOT", tmp_path):
+        assert launcher_module._venv_python() == sys.executable
+
+
+# --------------------------------------------------------------------------- readiness probes
+
+
+def test_port_is_listening_true_for_a_real_open_socket() -> None:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(("127.0.0.1", 0))
+    sock.listen(1)
     try:
-        import sys
-        from pathlib import Path as _Path
-        
-        _repo_root = _Path(__file__).resolve().parents[1]
-        if str(_repo_root) not in sys.path:
-            sys.path.insert(0, str(_repo_root))
-        
-        import app.app
-        from src.inference.predictor import AudioVisualResult
-        
-        # Mock predictor result
-        mock_result = AudioVisualResult(
-            mode="audio_visual",
-            predicted_label="sync",
-            sync_probability=0.8,
-            desync_probability=0.2,
-            aggregate_sync_score=0.8,
-            per_window_sync_scores=[0.7, 0.8, 0.9, 0.85, 0.75],
-            timing_metadata={"fps": 25.0, "num_frames": 5},
-        )
-        
-        with patch('app.app.get_predictor') as mock_get_predictor:
-            mock_predictor = Mock()
-            mock_predictor.predict_audio_visual.return_value = mock_result
-            mock_get_predictor.return_value = mock_predictor
-            
-            # Create temp video file
-            with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as f:
-                temp_path = f.name
-            
-            result_html, timeline_plot, error_msg = app.app.process_audio_visual(
-                temp_path, None, None
-            )
-            
-            assert result_html is not None
-            assert timeline_plot is not None
-            assert error_msg is None
-            assert "SYNCHRONIZED" in result_html
-            assert "80.00%" in result_html  # sync probability
-            
-            # Cleanup
-            Path(temp_path).unlink(missing_ok=True)
-            if timeline_plot and Path(timeline_plot).exists():
-                Path(timeline_plot).unlink()
-    except Exception as e:
-        pytest.skip(f"AV callback test failed (expected if dependencies missing): {e}")
+        port = sock.getsockname()[1]
+        assert launcher_module._port_is_listening("127.0.0.1", port) is True
+    finally:
+        sock.close()
 
 
-def test_callbacks_handle_missing_input_cleanly() -> None:
-    """Test that callbacks handle missing input cleanly."""
-    try:
-        import sys
-        from pathlib import Path as _Path
-        
-        _repo_root = _Path(__file__).resolve().parents[1]
-        if str(_repo_root) not in sys.path:
-            sys.path.insert(0, str(_repo_root))
-        
-        import app.app
-        
-        # Test audio-only with None input
-        result_html, error_msg = app.app.process_audio_only(None)
-        assert result_html is None
-        assert error_msg is not None
-        assert "Please upload" in error_msg
-        
-        # Test AV with None input
-        result_html, timeline_plot, error_msg = app.app.process_audio_visual(None, None, None)
-        assert result_html is None
-        assert timeline_plot is None
-        assert error_msg is not None
-        assert "Please upload" in error_msg
-    except Exception as e:
-        pytest.skip(f"Missing input test failed (expected if dependencies missing): {e}")
+def test_port_is_listening_false_for_a_closed_port() -> None:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()  # now definitely closed
+    assert launcher_module._port_is_listening("127.0.0.1", port) is False
 
 
-def test_probability_values_displayed_correctly() -> None:
-    """Test that probability values are displayed correctly."""
-    try:
-        import sys
-        from pathlib import Path as _Path
-        
-        _repo_root = _Path(__file__).resolve().parents[1]
-        if str(_repo_root) not in sys.path:
-            sys.path.insert(0, str(_repo_root))
-        
-        import app.app
-        from src.inference.predictor import AudioOnlyResult
-        
-        # Test with various probability values
-        test_cases = [
-            (0.0, 1.0, 1.0),  # All bonafide
-            (1.0, 0.0, 1.0),  # All spoof
-            (0.5, 0.5, 0.5),  # Equal
-            (0.25, 0.75, 0.75),  # Mostly bonafide
-        ]
-        
-        for spoof_prob, bonafide_prob, expected_confidence in test_cases:
-            mock_result = AudioOnlyResult(
-                mode="audio_only",
-                predicted_label="bonafide" if bonafide_prob >= spoof_prob else "spoof",
-                spoof_probability=spoof_prob,
-                bonafide_probability=bonafide_prob,
-                confidence=expected_confidence,
-            )
-            
-            with patch('app.app.get_predictor') as mock_get_predictor:
-                mock_predictor = Mock()
-                mock_predictor.predict_audio.return_value = mock_result
-                mock_get_predictor.return_value = mock_predictor
-                
-                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
-                    temp_path = f.name
-                
-                result_html, error_msg = app.app.process_audio_only(temp_path)
-                
-                assert result_html is not None
-                # Check that percentages are displayed correctly
-                assert f"{spoof_prob * 100:.2f}%" in result_html
-                assert f"{bonafide_prob * 100:.2f}%" in result_html
-                assert f"{expected_confidence * 100:.2f}%" in result_html
-                
-                Path(temp_path).unlink(missing_ok=True)
-    except Exception as e:
-        pytest.skip(f"Probability display test failed (expected if dependencies missing): {e}")
+def test_backend_is_ready_true_when_health_reports_ready() -> None:
+    fake_response = Mock()
+    fake_response.status = 200
+    fake_response.read.return_value = b'{"status": "ready"}'
+    fake_response.__enter__ = Mock(return_value=fake_response)
+    fake_response.__exit__ = Mock(return_value=False)
+    with patch.object(launcher_module.urllib.request, "urlopen", return_value=fake_response):
+        assert launcher_module._backend_is_ready() is True
 
 
-def test_timeline_data_generated_correctly() -> None:
-    """Test that timeline data is generated correctly from predictor output."""
-    try:
-        import sys
-        from pathlib import Path as _Path
-        
-        _repo_root = _Path(__file__).resolve().parents[1]
-        if str(_repo_root) not in sys.path:
-            sys.path.insert(0, str(_repo_root))
-        
-        import app.app
-        from src.inference.predictor import AudioVisualResult
-        
-        # Test with different timing metadata
-        test_cases = [
-            ([0.5, 0.6, 0.7, 0.8], {"fps": 25.0, "num_frames": 4}),
-            ([0.3, 0.4, 0.5], {"fps": 30.0, "num_frames": 3}),
-        ]
-        
-        for scores, metadata in test_cases:
-            mock_result = AudioVisualResult(
-                mode="audio_visual",
-                predicted_label="sync",
-                sync_probability=0.6,
-                desync_probability=0.4,
-                aggregate_sync_score=0.6,
-                per_window_sync_scores=scores,
-                timing_metadata=metadata,
-            )
-            
-            timeline_plot = app.app.create_timeline_plot(mock_result)
-            
-            assert timeline_plot is not None
-            assert Path(timeline_plot).exists()
-            
-            # Cleanup
-            Path(timeline_plot).unlink()
-    except Exception as e:
-        pytest.skip(f"Timeline generation test failed (expected if dependencies missing): {e}")
+def test_backend_is_ready_false_when_status_is_unavailable() -> None:
+    fake_response = Mock()
+    fake_response.status = 200
+    fake_response.read.return_value = b'{"status": "unavailable"}'
+    fake_response.__enter__ = Mock(return_value=fake_response)
+    fake_response.__exit__ = Mock(return_value=False)
+    with patch.object(launcher_module.urllib.request, "urlopen", return_value=fake_response):
+        assert launcher_module._backend_is_ready() is False
 
 
-def test_predictor_exceptions_become_user_friendly_errors() -> None:
-    """Test that predictor exceptions become user-friendly UI errors."""
-    try:
-        import sys
-        from pathlib import Path as _Path
-        
-        _repo_root = _Path(__file__).resolve().parents[1]
-        if str(_repo_root) not in sys.path:
-            sys.path.insert(0, str(_repo_root))
-        
-        import app.app
-        
-        # Test FileNotFoundError
-        with patch('app.app.get_predictor') as mock_get_predictor:
-            mock_predictor = Mock()
-            mock_predictor.predict_audio.side_effect = FileNotFoundError("Audio file not found")
-            mock_get_predictor.return_value = mock_predictor
-            
-            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
-                temp_path = f.name
-            
-            result_html, error_msg = app.app.process_audio_only(temp_path)
-            
-            assert result_html is None
-            assert error_msg is not None
-            assert "❌" in error_msg  # Error prefix
-            assert "File not found" in error_msg
-            
-            Path(temp_path).unlink(missing_ok=True)
-        
-        # Test ValueError
-        with patch('app.app.get_predictor') as mock_get_predictor:
-            mock_predictor = Mock()
-            mock_predictor.predict_audio.side_effect = ValueError("Processing error")
-            mock_get_predictor.return_value = mock_predictor
-            
-            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
-                temp_path = f.name
-            
-            result_html, error_msg = app.app.process_audio_only(temp_path)
-            
-            assert result_html is None
-            assert error_msg is not None
-            assert "❌" in error_msg
-            assert "Processing error" in error_msg
-            
-            Path(temp_path).unlink(missing_ok=True)
-    except Exception as e:
-        pytest.skip(f"Exception handling test failed (expected if dependencies missing): {e}")
+def test_backend_is_ready_false_on_connection_error() -> None:
+    with patch.object(launcher_module.urllib.request, "urlopen", side_effect=URLError("refused")):
+        assert launcher_module._backend_is_ready() is False
 
 
-def test_architecture_diagram_creation() -> None:
-    """Test that architecture diagram HTML is created correctly."""
-    try:
-        import sys
-        from pathlib import Path as _Path
-        
-        _repo_root = _Path(__file__).resolve().parents[1]
-        if str(_repo_root) not in sys.path:
-            sys.path.insert(0, str(_repo_root))
-        
-        import app.app
-        
-        diagram_html = app.app.create_architecture_diagram()
-        
-        assert diagram_html is not None
-        assert "How SyncGuard Works" in diagram_html
-        assert "Audio-Only Mode" in diagram_html
-        assert "Audio-Visual Mode" in diagram_html
-        assert "CNN + Transformer" in diagram_html
-    except Exception as e:
-        pytest.skip(f"Architecture diagram test failed (expected if dependencies missing): {e}")
+def test_frontend_is_ready_true_for_2xx_3xx() -> None:
+    fake_response = Mock()
+    fake_response.status = 200
+    fake_response.__enter__ = Mock(return_value=fake_response)
+    fake_response.__exit__ = Mock(return_value=False)
+    with patch.object(launcher_module.urllib.request, "urlopen", return_value=fake_response):
+        assert launcher_module._frontend_is_ready() is True
 
 
-def test_model_info_creation() -> None:
-    """Test that model info HTML is created correctly."""
-    try:
-        import sys
-        from pathlib import Path as _Path
-        
-        _repo_root = _Path(__file__).resolve().parents[1]
-        if str(_repo_root) not in sys.path:
-            sys.path.insert(0, str(_repo_root))
-        
-        import app.app
-        
-        # Mock predictor
-        with patch('app.app.get_predictor') as mock_get_predictor:
-            mock_predictor = Mock()
-            mock_predictor.device = Mock(type='cpu')
-            mock_predictor.audio_token_seconds = 0.01
-            mock_get_predictor.return_value = mock_predictor
-            
-            info_html = app.app.create_model_info()
-            
-            assert info_html is not None
-            assert "Model Information" in info_html
-            assert "Phase 5" in info_html
-            assert "Phase 8" in info_html
-            assert "Phase 12" in info_html
-            assert "0.010" in info_html  # audio token seconds
-            assert "IMPORTANT LIMITATION" in info_html
-    except Exception as e:
-        pytest.skip(f"Model info test failed (expected if dependencies missing): {e}")
+def test_frontend_is_ready_false_on_connection_error() -> None:
+    with patch.object(launcher_module.urllib.request, "urlopen", side_effect=URLError("refused")):
+        assert launcher_module._frontend_is_ready() is False
 
 
-def test_gradio_schema_generation_succeeds() -> None:
-    """Test that Gradio can generate API schema without JSON schema errors.
-    
-    This regression test specifically checks for the 'TypeError: argument of type bool is not iterable'
-    error that occurred with incompatible gradio/gradio-client versions.
-    """
-    try:
-        import sys
-        from pathlib import Path as _Path
-        
-        _repo_root = _Path(__file__).resolve().parents[1]
-        if str(_repo_root) not in sys.path:
-            sys.path.insert(0, str(_repo_root))
-        
-        import app.app
-        
-        # Mock predictor initialization
-        with patch('app.app.get_predictor') as mock_get_predictor:
-            mock_predictor = Mock()
-            mock_predictor.device = Mock(type='cpu')
-            mock_predictor.audio_token_seconds = 0.01
-            mock_get_predictor.return_value = mock_predictor
-            
-            # Create UI
-            demo = app.app.create_ui()
-            assert demo is not None
-            
-            # Try to generate API schema - this is where the bug occurred
-            # This tests that gradio_client can parse the component schemas
-            try:
-                schema = demo.config
-                assert schema is not None
-                assert isinstance(schema, dict)
-            except TypeError as e:
-                if "argument of type 'bool' is not iterable" in str(e):
-                    pytest.fail("Gradio schema generation failed with bool type error - likely gradio/gradio_client version incompatibility")
-                raise
-    except Exception as e:
-        pytest.skip(f"Gradio schema test failed (expected if dependencies missing): {e}")
+def test_wait_until_returns_true_as_soon_as_check_succeeds() -> None:
+    calls = {"n": 0}
+
+    def check() -> bool:
+        calls["n"] += 1
+        return calls["n"] >= 3
+
+    assert launcher_module._wait_until(check, timeout_seconds=5.0) is True
+    assert calls["n"] == 3
+
+
+def test_wait_until_returns_false_on_timeout() -> None:
+    assert launcher_module._wait_until(lambda: False, timeout_seconds=0.2) is False
+
+
+# --------------------------------------------------------------------------- SyncGuardLauncher
+
+
+def test_start_backend_reuses_already_ready_instance() -> None:
+    launcher = launcher_module.SyncGuardLauncher()
+    with patch.object(launcher_module, "_port_is_listening", return_value=True), patch.object(
+        launcher_module, "_backend_is_ready", return_value=True
+    ):
+        launcher.start_backend()
+    assert launcher.processes == []  # nothing spawned - existing instance reused
+
+
+def test_start_backend_raises_if_port_busy_with_non_syncguard_process() -> None:
+    launcher = launcher_module.SyncGuardLauncher()
+    with patch.object(launcher_module, "_port_is_listening", return_value=True), patch.object(
+        launcher_module, "_backend_is_ready", return_value=False
+    ):
+        with pytest.raises(launcher_module.LauncherError, match="already in use"):
+            launcher.start_backend()
+
+
+def test_start_backend_raises_if_process_exits_early() -> None:
+    launcher = launcher_module.SyncGuardLauncher()
+    fake_proc = Mock()
+    fake_proc.poll.return_value = 1  # already exited
+    fake_proc.returncode = 1
+    with patch.object(launcher_module, "_port_is_listening", return_value=False), patch.object(
+        launcher_module.SyncGuardLauncher, "_spawn", return_value=fake_proc
+    ):
+        with pytest.raises(launcher_module.LauncherError, match="exited early"):
+            launcher.start_backend()
+
+
+def test_start_frontend_raises_without_node_on_path() -> None:
+    launcher = launcher_module.SyncGuardLauncher()
+    with patch.object(launcher_module, "_port_is_listening", return_value=False), patch.object(
+        launcher_module.shutil, "which", return_value=None
+    ):
+        with pytest.raises(launcher_module.LauncherError, match="Node.js"):
+            launcher.start_frontend()
+
+
+def test_shutdown_terminates_and_waits_for_all_owned_processes() -> None:
+    launcher = launcher_module.SyncGuardLauncher()
+    proc1, proc2 = Mock(), Mock()
+    proc1.poll.return_value = None  # still running
+    proc2.poll.return_value = None
+    launcher.processes = [proc1, proc2]
+
+    launcher.shutdown()
+
+    proc1.terminate.assert_called_once()
+    proc2.terminate.assert_called_once()
+    proc1.wait.assert_called_once()
+    proc2.wait.assert_called_once()
+
+
+def test_shutdown_is_a_noop_when_nothing_was_spawned() -> None:
+    launcher = launcher_module.SyncGuardLauncher()
+    launcher.shutdown()  # must not raise
+    assert launcher.processes == []
+
+
+def test_wait_forever_raises_if_an_owned_process_dies() -> None:
+    launcher = launcher_module.SyncGuardLauncher()
+    dead_proc = Mock()
+    dead_proc.poll.return_value = 137
+    launcher.processes = [dead_proc]
+
+    with patch.object(time, "sleep"):
+        with pytest.raises(launcher_module.LauncherError, match="exited unexpectedly"):
+            launcher.wait_forever()
