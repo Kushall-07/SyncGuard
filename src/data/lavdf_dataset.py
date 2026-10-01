@@ -34,6 +34,7 @@ __all__ = [
     "crop_audio_window",
     "compute_window_seconds",
     "lavdf_collate_fn",
+    "load_lavdf_manifest",
 ]
 
 
@@ -126,6 +127,58 @@ class LAVDFSyncSample:
     audio_frames: int
 
 
+def load_lavdf_manifest(
+    manifest_path: str | Path,
+    video_dir: str | Path,
+    audio_dir: str | Path,
+    split: str,
+) -> list[LAVDFSyncSample]:
+    """Load `LAVDFSyncSample` rows from a manifest CSV, filtered to `split`.
+
+    Shared manifest-loading logic used by both `LAVDFSyncDataset` (Phase 11
+    token-shift baseline) and `LAVDFPhysicalSyncDataset` (physical-shift
+    training, see `src/data/lavdf_physical_sync_dataset.py`), so both datasets
+    parse the manifest identically.
+    """
+    manifest_path = Path(manifest_path)
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"Manifest not found: {manifest_path}")
+
+    samples: list[LAVDFSyncSample] = []
+    with manifest_path.open("r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row["split"] != split:
+                continue
+
+            fake_periods = parse_fake_periods(row.get("fake_periods", "[]"))
+            video_path = Path(video_dir) / Path(row["path"]).name
+            audio_path = Path(audio_dir) / f"{Path(row['path']).stem}.wav"
+
+            samples.append(
+                LAVDFSyncSample(
+                    sample_id=row["sample_id"],
+                    video_path=video_path,
+                    audio_path=audio_path,
+                    label=int(row["label"]),
+                    label_name=row["label_name"],
+                    split=row["split"],
+                    modify_audio=row["modify_audio"] == "True",
+                    modify_video=row["modify_video"] == "True",
+                    n_fakes=int(row["n_fakes"]),
+                    fake_periods=fake_periods,
+                    duration=float(row["duration"]),
+                    original=row.get("original", ""),
+                    video_frames=int(row["video_frames"]),
+                    audio_frames=int(row["audio_frames"]),
+                )
+            )
+
+    if not samples:
+        raise ValueError(f"No samples found for split={split!r} in {manifest_path}")
+    return samples
+
+
 class LAVDFSyncDataset(Dataset):
     """Dataset for LAV-DF audio-visual synchronization.
 
@@ -158,45 +211,12 @@ class LAVDFSyncDataset(Dataset):
 
     def _load_manifest(self) -> list[LAVDFSyncSample]:
         """Load samples from manifest CSV, filtering by configured split."""
-        manifest_path = Path(self.config.manifest_path)
-        if not manifest_path.exists():
-            raise FileNotFoundError(f"Manifest not found: {manifest_path}")
-
-        samples: list[LAVDFSyncSample] = []
-        with manifest_path.open("r", newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                if row["split"] != self.config.split:
-                    continue
-
-                fake_periods = parse_fake_periods(row.get("fake_periods", "[]"))
-                video_path = Path(self.config.video_dir) / Path(row["path"]).name
-                audio_path = Path(self.config.audio_dir) / f"{Path(row['path']).stem}.wav"
-
-                samples.append(
-                    LAVDFSyncSample(
-                        sample_id=row["sample_id"],
-                        video_path=video_path,
-                        audio_path=audio_path,
-                        label=int(row["label"]),
-                        label_name=row["label_name"],
-                        split=row["split"],
-                        modify_audio=row["modify_audio"] == "True",
-                        modify_video=row["modify_video"] == "True",
-                        n_fakes=int(row["n_fakes"]),
-                        fake_periods=fake_periods,
-                        duration=float(row["duration"]),
-                        original=row.get("original", ""),
-                        video_frames=int(row["video_frames"]),
-                        audio_frames=int(row["audio_frames"]),
-                    )
-                )
-
-        if not samples:
-            raise ValueError(
-                f"No samples found for split={self.config.split!r} in {manifest_path}"
-            )
-        return samples
+        return load_lavdf_manifest(
+            self.config.manifest_path,
+            self.config.video_dir,
+            self.config.audio_dir,
+            self.config.split,
+        )
 
     def __len__(self) -> int:
         return len(self.samples)

@@ -55,6 +55,14 @@ COPY outputs/runs/deepfake-transformer-final-20260908-210034/checkpoints/visual_
      outputs/runs/deepfake-transformer-final-20260908-210034/checkpoints/visual_encoder.pt
 COPY outputs/runs/sync-phase12-lambda01-20260913-115101/checkpoints/best.pt \
      outputs/runs/sync-phase12-lambda01-20260913-115101/checkpoints/best.pt
+# Physically-shift-trained AV sync checkpoint (production default as of the
+# sync-detection fix; see docs/decisions/0006-physical-sync-training.md). The
+# old checkpoint above is kept in the image too, purely for comparison via
+# SYNCGUARD_SYNC_MODEL_PATH/SYNCGUARD_SYNC_CONFIG_PATH env overrides.
+COPY outputs/runs/sync-physical-v2-20260927-020548/checkpoints/best.pt \
+     outputs/runs/sync-physical-v2-20260927-020548/checkpoints/best.pt
+COPY outputs/runs/sync-physical-v2-20260927-020548/config.yaml \
+     outputs/runs/sync-physical-v2-20260927-020548/config.yaml
 
 # SYNCGUARD_CHECKPOINT_DIR / SYNCGUARD_CONFIG_DIR / SYNCGUARD_DATA_DIR default to
 # repo-relative paths (see backend/main.py) which already resolve correctly here

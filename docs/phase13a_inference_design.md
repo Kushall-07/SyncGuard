@@ -1,5 +1,13 @@
 # Phase 13A: Dual-Mode Inference API Design Notes
 
+> **Update**: `predict_audio_visual` now supports two AV inference regimes,
+> `"legacy_full_clip"` (the design described below, unchanged) and `"windowed"`
+> (now the default - tiles a clip into 32-frame windows matching the trained/
+> evaluated temporal regime). See `docs/windowed_av_inference.md` for the full
+> design, A/B evidence, and the decision to make `"windowed"` the production
+> default. Everything below this point describes the original (still-available,
+> unmodified) full-clip path.
+
 ## Overview
 
 Phase 13A implements a clean dual-mode inference API that separates prediction from training, enabling deployment without training dependencies.

@@ -267,7 +267,8 @@ directory:
 | `spoof-transformer-20260906-123646/checkpoints/best.pt` + its `config.yaml` | Audio-only mode: Transformer spoof classifier (also the frozen audio encoder for AV mode) |
 | `spoof-cnn-baseline-20260906-104508/checkpoints/best.pt` + its `config.yaml` | Audio-only mode: CNN half of the ensemble |
 | `deepfake-transformer-final-20260908-210034/checkpoints/visual_encoder.pt` | AV mode: frozen visual landmark encoder (self-contained export, no separate config needed) |
-| `sync-phase12-lambda01-20260913-115101/checkpoints/best.pt` | AV mode: trained cross-attention + Sync Head, paired with `configs/av_align_lambda01.yaml` (already in the repo) |
+| `sync-physical-v2-20260927-020548/checkpoints/best.pt` | AV mode (production default): physically-shift-trained cross-attention + Sync Head, paired with `configs/av_align_physical.yaml` (already in the repo) — see `docs/decisions/0006-physical-sync-training.md` |
+| `sync-phase12-lambda01-20260913-115101/checkpoints/best.pt` | AV mode (old, kept for comparison only — set `SYNCGUARD_SYNC_MODEL_PATH`/`SYNCGUARD_SYNC_CONFIG_PATH` to use it instead): the original token-shift-trained cross-attention + Sync Head, paired with `configs/av_align_lambda01.yaml` |
 | `checkpoints/mediapipe/face_landmarker.task` | AV mode: on-the-fly landmark extraction when a client uploads a video without precomputed landmarks |
 
 ### CPU inference limitation and observed latency

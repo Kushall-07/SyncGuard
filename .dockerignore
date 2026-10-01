@@ -37,6 +37,8 @@ outputs/runs/*
 !outputs/runs/deepfake-transformer-final-20260908-210034/**
 !outputs/runs/sync-phase12-lambda01-20260913-115101
 !outputs/runs/sync-phase12-lambda01-20260913-115101/**
+!outputs/runs/sync-physical-v2-20260927-020548
+!outputs/runs/sync-physical-v2-20260927-020548/**
 
 # Frontend: built separately for the primary (Vercel + Docker backend) target,
 # so its source/tooling is never needed in this image. frontend/dist/ is
